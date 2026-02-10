@@ -7,7 +7,7 @@ import logging
 
 load_dotenv()
 
-BASE_URL = "http://rest.datafeeds.rolling-insights.com/api/v1"
+BASE_URL = os.getenv("RSC_BASE_URL", "https://rest.datafeeds.rolling-insights.com/api/v1")
 RSC_TOKEN = os.getenv("RSC_TOKEN")
 
 logger = logging.getLogger(__name__)

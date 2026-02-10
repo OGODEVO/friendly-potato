@@ -2,9 +2,11 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 import json
 from .nba_client import NBAClient
+from .odds_client import OddsClient
 from .team_lookup import resolve_team
 
 client = NBAClient()
+odds_client = OddsClient()
 
 # NBA schedules use US Eastern Time
 _ET = timezone(timedelta(hours=-5))
@@ -220,6 +222,75 @@ def get_depth_chart(team_name: str) -> str:
     data = client.get_depth_charts(team_id=team_id)
     return json.dumps(data)
 
+
+def get_market_odds(
+    sport: str = "basketball_nba",
+    regions: str = "us",
+    markets: str = "h2h",
+    date_format: str = "iso",
+    odds_format: str = "american",
+    team_name: str = None,
+    event_ids: str = None,
+    bookmakers: str = None,
+    commence_time_from: str = None,
+    commence_time_to: str = None,
+    include_links: bool = None,
+    include_sids: bool = None,
+    include_bet_limits: bool = None,
+    include_rotation_numbers: bool = None,
+) -> str:
+    """
+    Get market odds (moneyline / spread / totals) from Odds API.
+
+    Args:
+        sport (str, optional): Sport key. Default "basketball_nba".
+        regions (str, optional): Region list, e.g. "us" or "us,eu".
+        markets (str, optional): "h2h", "spreads", "totals", comma-separated allowed.
+        date_format (str, optional): "iso" or "unix".
+        odds_format (str, optional): "american" or "decimal".
+        team_name (str, optional): Optional team filter. Returns only matching events.
+        event_ids (str, optional): Comma-separated event IDs.
+        bookmakers (str, optional): Comma-separated bookmaker keys.
+        commence_time_from (str, optional): ISO timestamp lower bound.
+        commence_time_to (str, optional): ISO timestamp upper bound.
+        include_links/include_sids/include_bet_limits/include_rotation_numbers (bool, optional): API flags.
+    """
+    data = odds_client.get_odds(
+        sport=sport,
+        regions=regions,
+        markets=markets,
+        date_format=date_format,
+        odds_format=odds_format,
+        event_ids=event_ids,
+        bookmakers=bookmakers,
+        commence_time_from=commence_time_from,
+        commence_time_to=commence_time_to,
+        include_links=include_links,
+        include_sids=include_sids,
+        include_bet_limits=include_bet_limits,
+        include_rotation_numbers=include_rotation_numbers,
+    )
+
+    if "error" in data:
+        return json.dumps(data)
+
+    if team_name:
+        needle = team_name.strip().lower()
+        events = data.get("data", [])
+        filtered = []
+        for event in events:
+            home = str(event.get("home_team", "")).lower()
+            away = str(event.get("away_team", "")).lower()
+            if needle in home or needle in away:
+                filtered.append(event)
+
+        data["data"] = filtered
+        data["meta"] = data.get("meta", {})
+        data["meta"]["team_filter"] = team_name
+        data["meta"]["events_returned"] = len(filtered)
+
+    return json.dumps(data)
+
 # Tool Definitions for OpenAI
 TOOLS_SCHEMA = [
     {
@@ -304,6 +375,32 @@ TOOLS_SCHEMA = [
                 "required": ["team_name"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_market_odds",
+            "description": "Get live betting market odds (h2h/spreads/totals). Use this before making market-based claims.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sport": {"type": "string", "description": "Sport key, default 'basketball_nba'. Use 'upcoming' for cross-sport upcoming events."},
+                    "regions": {"type": "string", "description": "Bookmaker regions, e.g. 'us' or 'us,eu'."},
+                    "markets": {"type": "string", "description": "Comma-separated markets: h2h,spreads,totals,outrights."},
+                    "date_format": {"type": "string", "description": "Timestamp format: iso or unix."},
+                    "odds_format": {"type": "string", "description": "Odds format: american or decimal."},
+                    "team_name": {"type": "string", "description": "Optional team filter (e.g. 'Lakers')."},
+                    "event_ids": {"type": "string", "description": "Optional comma-separated event ids."},
+                    "bookmakers": {"type": "string", "description": "Optional comma-separated bookmaker keys."},
+                    "commence_time_from": {"type": "string", "description": "Optional ISO-8601 lower bound."},
+                    "commence_time_to": {"type": "string", "description": "Optional ISO-8601 upper bound."},
+                    "include_links": {"type": "boolean", "description": "Include bookmaker deep links if available."},
+                    "include_sids": {"type": "boolean", "description": "Include source IDs if available."},
+                    "include_bet_limits": {"type": "boolean", "description": "Include bet limits if available."},
+                    "include_rotation_numbers": {"type": "boolean", "description": "Include rotation numbers if available."}
+                }
+            }
+        }
     }
 ]
 
@@ -313,5 +410,6 @@ AVAILABLE_TOOLS = {
     "get_team_stats": get_team_stats,
     "get_player_stats": get_player_stats,
     "get_injuries": get_injuries,
-    "get_depth_chart": get_depth_chart
+    "get_depth_chart": get_depth_chart,
+    "get_market_odds": get_market_odds
 }
