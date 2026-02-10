@@ -166,8 +166,8 @@ def main():
         sys.exit(1)
 
     print(f"🏀 Starting Telegram Bot...")
-    print(f"   Analyst:    model={analyst_model}, temp=0.4")
-    print(f"   Strategist: model={strategist_model}, temp=0.6")
+    print(f"   Analyst:    model={analyst_config['model']}, temp=0.4")
+    print(f"   Strategist: model={strategist_config['model']}, temp=0.6")
     print(f"   Max Tokens: 128,000")
     print(f"   Streaming:  ON")
     print(f"   LLM URL:    {base_url or 'default'}")
