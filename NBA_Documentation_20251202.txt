@@ -1,0 +1,2174 @@
+# DataFeeds by Rolling Insights: NBA API Documentation
+
+- **Season Schedule**
+    
+    ### Description:
+    
+    This endpoint allows users to retrieve the season schedule for NBA games for a particular year specified in the endpoint.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves the season schedule for a specified year, including details such as season type, player IDs, game IDs, and more as mentioned in the example.
+        - **Why it exists**: Provides a comprehensive overview of the NBA season for the requested year, offering users the information they need about that season.
+    - **Use Cases**:
+        - Users can access the entire season schedule for the team to gather information and conduct assessments. We recommend only once at the start of the year for optimal use.
+        - The schedule can be used to display when the games are being played. 
+         can be useful for more specific detail queries like the box score results with the game_ID, etc
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Note that all endpoint naming is case-sensitive.
+        - In the Request URL, we recommend adding the DATE value instead of leaving it blank. If the DATE value is not added, the request will default to the current date's data. This ensures that you receive accurate and intended information.
+        - For NBA games use NBA as SPORT followed by your `RSC_token` (required)
+        - For detailed information on obtaining and using the `RSC_token`, contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule-season/<`DATE`>/<`SPORT`>?`RSC_token`=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **DATE** | YYYY | OPTIONAL. Returns season schedule for the specified season. If omitted, returns the schedule for current season. |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example: team_id=9 | OPTIONAL |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule-season/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule-season/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=9**
+    
+    ### Special header in the response: "**`RS-DATA-TYPE`**": "**`SEASON-SCHEDULES`**"
+    
+    ### Response:
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: `**application/json**` | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type: Text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+        "data": {
+            "NBA": [
+                {
+                    "away_team": "Sacramento Kings",
+                    "home_team": "Los Angeles Lakers",
+                    "away_team_ID": 19,
+                    "home_team_ID": 12,
+                    "game_ID": "20231011-19-12",
+                    "game_time": "Thu, 12 Oct 2023 02:00:00 GMT",
+                    "season_type": "Preseason",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "scheduled",
+                    "broadcast": "NBATV"
+                },
+                {
+                    "away_team": "Boston Celtics",
+                    "home_team": "Philadelphia 76ers",
+                    "away_team_ID": 6,
+                    "home_team_ID": 17,
+                    "game_ID": "20231011-6-17",
+                    "game_time": "Wed, 11 Oct 2023 23:00:00 GMT",
+                    "season_type": "Preseason",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "scheduled",
+                    "broadcast": "NBATV"
+                },
+                {
+                    "away_team": "Memphis Grizzlies",
+                    "home_team": "Atlanta Hawks",
+                    "away_team_ID": 11,
+                    "home_team_ID": 5,
+                    "game_ID": "20231012-11-5",
+                    "game_time": "Thu, 12 Oct 2023 23:30:00 GMT",
+                    "season_type": "Preseason",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "scheduled",
+                    "broadcast": "NBATV"
+                },
+                {
+                    "away_team": "Oklahoma City Thunder",
+                    "home_team": "Detroit Pistons",
+                    "away_team_ID": 13,
+                    "home_team_ID": 26,
+                    "game_ID": "20231012-13-26",
+                    "game_time": "Thu, 12 Oct 2023 23:00:00 GMT",
+                    "season_type": "Preseason",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "scheduled",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Denver Nuggets",
+                    "home_team": "Chicago Bulls",
+                    "away_team_ID": 16,
+                    "home_team_ID": 22,
+                    "game_ID": "20231012-16-22",
+                    "game_time": "Fri, 13 Oct 2023 00:00:00 GMT",
+                    "season_type": "Preseason",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "scheduled",
+                    "broadcast": null
+                }
+            ]
+         }
+    }
+    ```
+    
+    ## Special Data Point Values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | "status” | Indicates the current status of NBA game status. | • scheduled"
+    • "delayed"
+    • "postponed"
+    • "suspended"
+    • "canceled"
+    • "inprogress"
+    • "final"
+    • "completed" |
+    | "season_type" | These designations help categorize the games and stats according to the specific phase of the season. | • "Preseason"
+    • "Regular Season"
+    • "Postseason" |
+    | "event_name" |  The specific event or series within the season. 
+     ◦ **null**: During Preseason and Regular Season | • null
+    • "First Round"
+    • "Semifinals"
+    • "Conference Finals"
+    • "NBA Finals" |
+    | "round" | The "round" field indicates the specific round of the postseason.
+    ◦ **null**: During Preseason and Regular Season | • null 
+    • 1
+    • 2
+    • 3
+    • 4 |
+- **Weekly Schedule**
+    
+    ### Description:
+    
+    This endpoint allows users to retrieve the weekly schedule for NBA games starting from the specified date in the endpoint, covering the following seven days.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves the weekly game schedule data for a requested date, including details such as season type, player IDs, game IDs, and more.
+        - **Why it exists**: Provides an overview of the NBA season for the specified week, offering users the information they need about games that happened during that week.
+    - **Use Cases**:
+        - Analyzing the schedule for the small and specific window to get more team and player information.
+        - The schedule can be useful for getting more specific queries for game dates, game ID, etc
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Note that all endpoint naming is case-sensitive.
+        - We recommend using this endpoint at the start of each week to retrieve the schedule for all games in the upcoming 7 days.
+        - In the Request URL, the DATE value is the required field
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, reach out to our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule-week/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **DATE** |  YYYY-MM-DD | REQUIRED. Returns all events from the date specified plus 7 days in advance. (date at which requested data as per GMT) |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED. |
+    | **team_id** | one specified team ID,
+    Example: team_id=1 | OPTIONAL.  |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule-week/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule-week/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=9**
+    
+    S**pecial header in the response: "`RS-DATA-TYPE`": "`WEEKLY-SCHEDULE`"**
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+        "data": {
+            "NBA": [
+                {
+                    "away_team": "Miami Heat",
+                    "home_team": "Atlanta Hawks",
+                    "away_team_ID": 20,
+                    "home_team_ID": 5,
+                    "game_ID": "20231111-20-5",
+                    "game_time": "Sun, 12 Nov 2023 00:30:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Milwaukee Bucks",
+                    "home_team": "Orlando Magic",
+                    "away_team_ID": 25,
+                    "home_team_ID": 4,
+                    "game_ID": "20231111-25-4",
+                    "game_time": "Sat, 11 Nov 2023 23:00:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Toronto Raptors",
+                    "home_team": "Boston Celtics",
+                    "away_team_ID": 30,
+                    "home_team_ID": 6,
+                    "game_ID": "20231111-30-6",
+                    "game_time": "Sun, 12 Nov 2023 00:00:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Cleveland Cavaliers",
+                    "home_team": "Golden State Warriors",
+                    "away_team_ID": 7,
+                    "home_team_ID": 21,
+                    "game_ID": "20231111-7-21",
+                    "game_time": "Sun, 12 Nov 2023 01:30:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": "NBATV"
+                },
+                {
+                    "away_team": "Minnesota Timberwolves",
+                    "home_team": "Golden State Warriors",
+                    "away_team_ID": 1,
+                    "home_team_ID": 21,
+                    "game_ID": "20231112-1-21",
+                    "game_time": "Mon, 13 Nov 2023 01:30:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                }
+             ]
+         }
+    }
+    ```
+    
+    ## **Special Data Point Values**:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | "status” | Indicates the status of the game according to that request date. | • scheduled"
+    • "delayed"
+    • "postponed"
+    • "suspended"
+    • "canceled"
+    • "inprogress"
+    • "final"
+    • "completed" |
+    | "season_type" | These designations help categorize the games and stats according to the specific phase of the season. | • "Preseason"
+    • "Regular Season"
+    • "Postseason" |
+    | "event_name" |  The specific event or series within the season. 
+    ◦ **null**: During Preseason and Regular Season | • null 
+    • "First Round"
+    • "Semifinals"
+    • "Conference Finals"
+    • "NBA Finals" |
+    | "round" | The "round" field indicates the specific round of the postseason.
+    ◦ **null**: During Preseason and Regular Season | • null 
+    • 1
+    • 2
+    • 3
+    • 4 |
+- **Daily Schedule**
+    
+    ### Description
+    
+    This endpoint allows users to retrieve the Daily schedule for NBA games for a particular date specified in the endpoint.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves game schedule data for a specified date for all games that started on that day as per GMT, including details such as season type, player IDs, game IDs, and more.
+        - **Why it exists**: Provides an overview of the NBA schedule for the specified date, offering users the information they need about games that happened during that date.
+    - **Use Cases**:
+        - Endpoint is handy for users can obtain the latest changes and updates to a daily schedule for today's upcoming games.
+        - Ingest the daily schedule requested to avoid unnecessary days’ worth of games when not required.
+        - The schedule can be useful for getting more specific queries for game dates, game IDs, etc.
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Note that all endpoint naming is case-sensitive.
+        - In the Request URL, the DATE value is the required field
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, reach out to our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&game_id=<`GAME_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **DATE** |  YYYY-MM-DD | REQUIRED( date gives requested data from day started as per GMT) |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example: team_id=1 | OPTIONAL |
+    | **game_id** | one specified game ID,
+    Example: game_id=20231111-20-5 | OPTIONAL. |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=20**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/schedule/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&game_id=20231111-20-5**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`DAILY-SCHEDULES`"**
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+        "data": {
+            "NBA": [
+                {
+                    "away_team": "Miami Heat",
+                    "home_team": "Atlanta Hawks",
+                    "away_team_ID": 20,
+                    "home_team_ID": 5,
+                    "game_ID": "20231111-20-5",
+                    "game_time": "Sun, 12 Nov 2023 00:30:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Milwaukee Bucks",
+                    "home_team": "Orlando Magic",
+                    "away_team_ID": 25,
+                    "home_team_ID": 4,
+                    "game_ID": "20231111-25-4",
+                    "game_time": "Sat, 11 Nov 2023 23:00:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Toronto Raptors",
+                    "home_team": "Boston Celtics",
+                    "away_team_ID": 30,
+                    "home_team_ID": 6,
+                    "game_ID": "20231111-30-6",
+                    "game_time": "Sun, 12 Nov 2023 00:00:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": null
+                },
+                {
+                    "away_team": "Cleveland Cavaliers",
+                    "home_team": "Golden State Warriors",
+                    "away_team_ID": 7,
+                    "home_team_ID": 21,
+                    "game_ID": "20231111-7-21",
+                    "game_time": "Sun, 12 Nov 2023 01:30:00 GMT",
+                    "season_type": "Regular Season",
+                    "event_name": null,
+                    "round": null,
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "broadcast": "NBATV"
+                }
+            ]
+        }
+    }
+    ```
+    
+    ## Special Data Point Values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | "season_type" | These designations help categorize the games and stats according to the specific phase of the season. | • "Preseason"
+    • "Regular Season"
+    • "Postseason" |
+    | "event_name" |  The specific event or series within the season. 
+        ◦ **null**: During Preseason and Regular Season | • null 
+    • "First Round"
+    • "Semifinals"
+    • "Conference Finals"
+    • "NBA Finals" |
+    | "round" | The "round" field indicates the specific round of the postseason.
+        ◦ **null**: During Preseason and Regular Season | • null 
+    • 1
+    • 2
+    • 3
+    • 4 |
+    | “status” | Indicates the status of the game according to that request date. | "scheduled"
+    "delayed"
+    "postponed"
+    "suspended"
+    "canceled"
+    "inprogress"
+    "final"
+    "completed" |
+    
+- **Live Feed**
+    
+    ## Description:
+    
+    This endpoint allows users to retrieve live updates for NBA games for a particular date specified in the endpoint.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves real-time game updates for NBA games that started on the specified date, including details such as box scores, game_status, season, game ID, and more.
+        - **Why it exists**: It provides a comprehensive overview of NBA games for the specified date. It also offers users real-time information on live or historical live box scores about ongoing and completed games.
+    - **Use Cases**:
+        - **Player Performance Tracking**: Monitor individual player statistics and metrics in real time.
+        - **Live and Past Data Access**: Users can use this endpoint to obtain live data for the current date and retrieve past live game statistics for previous dates.
+        - **Team Performance Analysis**: Track team performance metrics during a game to adapt strategies on the fly.
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - In the Request URL, the DATE value is the required field
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+     **http://rest.datafeeds.rolling-insights.com/api/v1/live/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+     **http://rest.datafeeds.rolling-insights.com/api/v1/live/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&game_id=<`GAME_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **DATE** | YYYY-MM-DD | REQUIRED.  Specific date returns started and finished events from that date. (date at which requested data as per GMT) |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example: team_id=1 | OPTIONAL.  |
+    | **game_id** | one specified game ID,
+    Example: game_id=20231111-20-5 | OPTIONAL.  |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/live/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/live/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=20**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/live/2023-11-11/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&game_id=20231111-20-5**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`LIVE-DATA`"**
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+        "data": {
+            "NBA": [
+                {
+                    "round": null,
+                    "sport": "NBA",
+                    "season": "2023-2024",
+                    "status": "completed",
+                    "game_ID": "20231110-12-24",
+                    "full_box": {
+                        "current": {
+                            "Quarter": 4,
+                            "TimeRemaining": null
+                        },
+                        "away_team": {
+                            "abbrv": "LAL",
+                            "score": 122,
+                            "mascot": "Lakers",
+                            "record": "4-5",
+                            "team_id": 12,
+                            "team_stats": {
+                                "fouls": 20,
+                                "blocks": 7,
+                                "steals": 9,
+                                "assists": 27,
+                                "turnovers": 11,
+                                "total_rebounds": 43,
+                                "two_points_made": 30,
+                                "field_goals_made": 42,
+                                "free_throws_made": 26,
+                                "three_points_made": 12,
+                                "defensive_rebounds": 34,
+                                "offensive_rebounds": 9,
+                                "two_point_percentage": 52.63,
+                                "two_points_attempted": 57,
+                                "field_goals_attempted": 84,
+                                "free_throws_attempted": 34,
+                                "three_points_attempted": 27
+                            },
+                            "division_name": "Western Conference - Pacific",
+                            "quarter_scores": {
+                                "1": 25,
+                                "2": 30,
+                                "3": 34,
+                                "4": 33
+                            }
+                        },
+                        "home_team": {
+                            "abbrv": "PHX",
+                            "score": 119,
+                            "mascot": "Suns",
+                            "record": "4-5",
+                            "team_id": 24,
+                            "team_stats": {
+                                "fouls": 24,
+                                "blocks": 1,
+                                "steals": 9,
+                                "assists": 22,
+                                "turnovers": 13,
+                                "total_rebounds": 52,
+                                "two_points_made": 27,
+                                "field_goals_made": 42,
+                                "free_throws_made": 20,
+                                "three_points_made": 15,
+                                "defensive_rebounds": 35,
+                                "offensive_rebounds": 17,
+                                "two_point_percentage": 47.37,
+                                "two_points_attempted": 57,
+                                "field_goals_attempted": 94,
+                                "free_throws_attempted": 27,
+                                "three_points_attempted": 37
+                            },
+                            "division_name": "Western Conference - Pacific",
+                            "quarter_scores": {
+                                "1": 34,
+                                "2": 29,
+                                "3": 33,
+                                "4": 23
+                            }
+                        }
+                    },
+                    "broadcast": "ESPN",
+                    "game_time": "Sat, 11 Nov 2023 03:00:00 GMT",
+                    "event_name": null,
+                    "player_box": {
+                        "away_team": {
+                            "80": {
+                                "fouls": 1,
+                                "blocks": 1,
+                                "player": "LeBron James",
+                                "points": 32,
+                                "status": "ACT",
+                                "steals": 1,
+                                "assists": 6,
+                                "minutes": "36:23",
+                                "position": "PF",
+                                "turnovers": 4,
+                                "total_rebounds": 11,
+                                "two_points_made": 8,
+                                "field_goals_made": 11,
+                                "free_throws_made": 7,
+                                "three_points_made": 3,
+                                "defensive_rebounds": 10,
+                                "offensive_rebounds": 1,
+                                "two_point_percentage": 61.54,
+                                "two_points_attempted": 13,
+                                "field_goals_attempted": 17,
+                                "free_throws_attempted": 11,
+                                "three_points_attempted": 4
+                            },
+                            "192": {
+                                "fouls": 4,
+                                "blocks": 1,
+                                "player": "D'Angelo Russell",
+                                "points": 19,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 9,
+                                "minutes": "28:53",
+                                "position": "SG",
+                                "turnovers": 1,
+                                "total_rebounds": 3,
+                                "two_points_made": 6,
+                                "field_goals_made": 6,
+                                "free_throws_made": 7,
+                                "three_points_made": 0,
+                                "defensive_rebounds": 3,
+                                "offensive_rebounds": 0,
+                                "two_point_percentage": 66.67,
+                                "two_points_attempted": 9,
+                                "field_goals_attempted": 12,
+                                "free_throws_attempted": 9,
+                                "three_points_attempted": 3
+                            },
+                            "275": {
+                                "fouls": 3,
+                                "blocks": 1,
+                                "player": "Anthony Davis",
+                                "points": 18,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 4,
+                                "minutes": "36:02",
+                                "position": "C",
+                                "turnovers": 1,
+                                "total_rebounds": 11,
+                                "two_points_made": 5,
+                                "field_goals_made": 5,
+                                "free_throws_made": 8,
+                                "three_points_made": 0,
+                                "defensive_rebounds": 7,
+                                "offensive_rebounds": 4,
+                                "two_point_percentage": 35.71,
+                                "two_points_attempted": 14,
+                                "field_goals_attempted": 14,
+                                "free_throws_attempted": 8,
+                                "three_points_attempted": 0
+                            },
+                            "345": {
+                                "fouls": 0,
+                                "blocks": 1,
+                                "player": "Christian Wood",
+                                "points": 5,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 0,
+                                "minutes": "17:36",
+                                "position": "C",
+                                "turnovers": 1,
+                                "total_rebounds": 9,
+                                "two_points_made": 1,
+                                "field_goals_made": 2,
+                                "free_throws_made": 0,
+                                "three_points_made": 1,
+                                "defensive_rebounds": 6,
+                                "offensive_rebounds": 3,
+                                "two_point_percentage": 25,
+                                "two_points_attempted": 4,
+                                "field_goals_attempted": 5,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 1
+                            },
+                            "592": {
+                                "fouls": 4,
+                                "blocks": 2,
+                                "player": "Taurean Prince",
+                                "points": 7,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 0,
+                                "minutes": "32:45",
+                                "position": "SF",
+                                "turnovers": 0,
+                                "total_rebounds": 1,
+                                "two_points_made": 3,
+                                "field_goals_made": 3,
+                                "free_throws_made": 1,
+                                "three_points_made": 0,
+                                "defensive_rebounds": 1,
+                                "offensive_rebounds": 0,
+                                "two_point_percentage": 75,
+                                "two_points_attempted": 4,
+                                "field_goals_attempted": 8,
+                                "free_throws_attempted": 2,
+                                "three_points_attempted": 4
+                            },
+                            "1068": {
+                                "fouls": 1,
+                                "blocks": 0,
+                                "player": "Jaxson Hayes",
+                                "points": 2,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 0,
+                                "minutes": "4:46",
+                                "position": "PF",
+                                "turnovers": 1,
+                                "total_rebounds": 1,
+                                "two_points_made": 1,
+                                "field_goals_made": 1,
+                                "free_throws_made": 0,
+                                "three_points_made": 0,
+                                "defensive_rebounds": 1,
+                                "offensive_rebounds": 0,
+                                "two_point_percentage": 100,
+                                "two_points_attempted": 1,
+                                "field_goals_attempted": 1,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 0
+                            },
+                            "1078": {
+                                "fouls": 3,
+                                "blocks": 0,
+                                "player": "Cam Reddish",
+                                "points": 17,
+                                "status": "ACT",
+                                "steals": 3,
+                                "assists": 0,
+                                "minutes": "27:43",
+                                "position": "SG",
+                                "turnovers": 0,
+                                "total_rebounds": 3,
+                                "two_points_made": 0,
+                                "field_goals_made": 5,
+                                "free_throws_made": 2,
+                                "three_points_made": 5,
+                                "defensive_rebounds": 2,
+                                "offensive_rebounds": 1,
+                                "two_point_percentage": 0,
+                                "two_points_attempted": 2,
+                                "field_goals_attempted": 10,
+                                "free_throws_attempted": 2,
+                                "three_points_attempted": 8
+                            },
+                            "1103": {
+                                "fouls": 3,
+                                "blocks": 1,
+                                "player": "Rui Hachimura",
+                                "points": 7,
+                                "status": "ACT",
+                                "steals": 4,
+                                "assists": 1,
+                                "minutes": "20:27",
+                                "position": "C",
+                                "turnovers": 1,
+                                "total_rebounds": 3,
+                                "two_points_made": 2,
+                                "field_goals_made": 3,
+                                "free_throws_made": 0,
+                                "three_points_made": 1,
+                                "defensive_rebounds": 3,
+                                "offensive_rebounds": 0,
+                                "two_point_percentage": 66.67,
+                                "two_points_attempted": 3,
+                                "field_goals_attempted": 6,
+                                "free_throws_attempted": 1,
+                                "three_points_attempted": 3
+                            },
+                            "1268": {
+                                "fouls": 1,
+                                "blocks": 0,
+                                "player": "Austin Reaves",
+                                "points": 15,
+                                "status": "ACT",
+                                "steals": 1,
+                                "assists": 7,
+                                "minutes": "35:25",
+                                "position": "PG",
+                                "turnovers": 2,
+                                "total_rebounds": 1,
+                                "two_points_made": 4,
+                                "field_goals_made": 6,
+                                "free_throws_made": 1,
+                                "three_points_made": 2,
+                                "defensive_rebounds": 1,
+                                "offensive_rebounds": 0,
+                                "two_point_percentage": 57.14,
+                                "two_points_attempted": 7,
+                                "field_goals_attempted": 11,
+                                "free_throws_attempted": 1,
+                                "three_points_attempted": 4
+                            }
+                        },
+                        "home_team": {
+                            "119": {
+                                "fouls": 3,
+                                "blocks": 0,
+                                "player": "Jusuf Nurkic",
+                                "points": 14,
+                                "status": "ACT",
+                                "steals": 1,
+                                "assists": 7,
+                                "minutes": "32:40",
+                                "position": "C",
+                                "turnovers": 2,
+                                "total_rebounds": 9,
+                                "two_points_made": 2,
+                                "field_goals_made": 4,
+                                "free_throws_made": 4,
+                                "three_points_made": 2,
+                                "defensive_rebounds": 6,
+                                "offensive_rebounds": 3,
+                                "two_point_percentage": 40,
+                                "two_points_attempted": 5,
+                                "field_goals_attempted": 8,
+                                "free_throws_attempted": 7,
+                                "three_points_attempted": 3
+                            },
+                            "282": {
+                                "fouls": 0,
+                                "blocks": 0,
+                                "player": "Eric Gordon",
+                                "points": 13,
+                                "status": "ACT",
+                                "steals": 3,
+                                "assists": 2,
+                                "minutes": "27:48",
+                                "position": "PG",
+                                "turnovers": 1,
+                                "total_rebounds": 2,
+                                "two_points_made": 2,
+                                "field_goals_made": 5,
+                                "free_throws_made": 0,
+                                "three_points_made": 3,
+                                "defensive_rebounds": 1,
+                                "offensive_rebounds": 1,
+                                "two_point_percentage": 40,
+                                "two_points_attempted": 5,
+                                "field_goals_attempted": 9,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 4
+                            },
+                            "304": {
+                                "fouls": 4,
+                                "blocks": 0,
+                                "player": "Kevin Durant",
+                                "points": 38,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 5,
+                                "minutes": "38:36",
+                                "position": "PF",
+                                "turnovers": 4,
+                                "total_rebounds": 9,
+                                "two_points_made": 9,
+                                "field_goals_made": 13,
+                                "free_throws_made": 8,
+                                "three_points_made": 4,
+                                "defensive_rebounds": 8,
+                                "offensive_rebounds": 1,
+                                "two_point_percentage": 42.86,
+                                "two_points_attempted": 21,
+                                "field_goals_attempted": 27,
+                                "free_throws_attempted": 10,
+                                "three_points_attempted": 6
+                            },
+                            "436": {
+                                "fouls": 4,
+                                "blocks": 0,
+                                "player": "Bradley Beal",
+                                "points": 24,
+                                "status": "ACT",
+                                "steals": 2,
+                                "assists": 2,
+                                "minutes": "31:30",
+                                "position": "PG",
+                                "turnovers": 2,
+                                "total_rebounds": 4,
+                                "two_points_made": 7,
+                                "field_goals_made": 9,
+                                "free_throws_made": 4,
+                                "three_points_made": 2,
+                                "defensive_rebounds": 2,
+                                "offensive_rebounds": 2,
+                                "two_point_percentage": 53.85,
+                                "two_points_attempted": 13,
+                                "field_goals_attempted": 17,
+                                "free_throws_attempted": 6,
+                                "three_points_attempted": 4
+                            },
+                            "870": {
+                                "fouls": 0,
+                                "blocks": 0,
+                                "player": "Keita Bates-Diop",
+                                "points": 11,
+                                "status": "ACT",
+                                "steals": 2,
+                                "assists": 0,
+                                "minutes": "29:48",
+                                "position": "PF",
+                                "turnovers": 0,
+                                "total_rebounds": 5,
+                                "two_points_made": 3,
+                                "field_goals_made": 4,
+                                "free_throws_made": 2,
+                                "three_points_made": 1,
+                                "defensive_rebounds": 3,
+                                "offensive_rebounds": 2,
+                                "two_point_percentage": 60,
+                                "two_points_attempted": 5,
+                                "field_goals_attempted": 11,
+                                "free_throws_attempted": 2,
+                                "three_points_attempted": 6
+                            },
+                            "872": {
+                                "fouls": 0,
+                                "blocks": 0,
+                                "player": "Josh Okogie",
+                                "points": 2,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 1,
+                                "minutes": "12:40",
+                                "position": "SF",
+                                "turnovers": 0,
+                                "total_rebounds": 6,
+                                "two_points_made": 0,
+                                "field_goals_made": 0,
+                                "free_throws_made": 2,
+                                "three_points_made": 0,
+                                "defensive_rebounds": 4,
+                                "offensive_rebounds": 2,
+                                "two_point_percentage": 0,
+                                "two_points_attempted": 0,
+                                "field_goals_attempted": 4,
+                                "free_throws_attempted": 2,
+                                "three_points_attempted": 4
+                            },
+                            "909": {
+                                "fouls": 6,
+                                "blocks": 0,
+                                "player": "Grayson Allen",
+                                "points": 9,
+                                "status": "ACT",
+                                "steals": 1,
+                                "assists": 4,
+                                "minutes": "31:41",
+                                "position": "SF",
+                                "turnovers": 2,
+                                "total_rebounds": 9,
+                                "two_points_made": 3,
+                                "field_goals_made": 4,
+                                "free_throws_made": 0,
+                                "three_points_made": 1,
+                                "defensive_rebounds": 7,
+                                "offensive_rebounds": 2,
+                                "two_point_percentage": 75,
+                                "two_points_attempted": 4,
+                                "field_goals_attempted": 8,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 4
+                            },
+                            "923": {
+                                "fouls": 2,
+                                "blocks": 1,
+                                "player": "Drew Eubanks",
+                                "points": 2,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 1,
+                                "minutes": "14:08",
+                                "position": "PF",
+                                "turnovers": 2,
+                                "total_rebounds": 5,
+                                "two_points_made": 1,
+                                "field_goals_made": 1,
+                                "free_throws_made": 0,
+                                "three_points_made": 0,
+                                "defensive_rebounds": 3,
+                                "offensive_rebounds": 2,
+                                "two_point_percentage": 33.33,
+                                "two_points_attempted": 3,
+                                "field_goals_attempted": 3,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 0
+                            },
+                            "941": {
+                                "fouls": 5,
+                                "blocks": 0,
+                                "player": "Yuta Watanabe",
+                                "points": 3,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 0,
+                                "minutes": "14:23",
+                                "position": "PF",
+                                "turnovers": 0,
+                                "total_rebounds": 1,
+                                "two_points_made": 0,
+                                "field_goals_made": 1,
+                                "free_throws_made": 0,
+                                "three_points_made": 1,
+                                "defensive_rebounds": 0,
+                                "offensive_rebounds": 1,
+                                "two_point_percentage": 0,
+                                "two_points_attempted": 1,
+                                "field_goals_attempted": 4,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 3
+                            },
+                            "1350": {
+                                "fouls": 0,
+                                "blocks": 0,
+                                "player": "Jordan Goodwin",
+                                "points": 3,
+                                "status": "ACT",
+                                "steals": 0,
+                                "assists": 0,
+                                "minutes": "6:46",
+                                "position": "SG",
+                                "turnovers": 0,
+                                "total_rebounds": 2,
+                                "two_points_made": 0,
+                                "field_goals_made": 1,
+                                "free_throws_made": 0,
+                                "three_points_made": 1,
+                                "defensive_rebounds": 1,
+                                "offensive_rebounds": 1,
+                                "two_point_percentage": 0,
+                                "two_points_attempted": 0,
+                                "field_goals_attempted": 3,
+                                "free_throws_attempted": 0,
+                                "three_points_attempted": 3
+                            }
+                        }
+                    },
+                    "game_status": "Final",
+                    "season_type": "Regular Season",
+                    "game_location": "Phoenix, Arizona",
+                    "away_team_name": "Los Angeles Lakers",
+                    "home_team_name": "Phoenix Suns"
+                }
+            ]
+        }
+    }
+    ```
+    
+    ## Basketball team statistics Box score values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | abbrv | Abbreviation | HOU: The team's abbreviation is HOU for Houston. |
+    | score | Score | 94: The team scored 94 points in the game. |
+    | mascot | Mascot | Rockets: The team's mascot is the Rockets. |
+    | record | A team's record in the NBA reflects its win-loss performance throughout the season. | 41-25: The team's win-loss record is 41 wins and 25 losses. |
+    | team_id | Team ID | 15: The ID assigned to the team. |
+    | fouls | In basketball, a foul is an infraction of the rules more serious than a violation. Fouls can be committed by both offensive and defensive players, and they can result in free throws or possession changes. | 20: The team committed 20 fouls. |
+    | blocks | a "block" occurs when a defensive player legally deflects or stops an opponent's field goal attempt, preventing the ball from going into the basket.  | 4: The team made 4 blocks. |
+    | steals | a "steal" occurs when a defensive player legally takes the ball away from an offensive player, leading to a change of possession. | 6: The team made 6 steals. |
+    | assists | An assist is a statistic awarded to a player who passes the ball to a teammate in a way that leads directly to a score. | 18: The team made 18 assists. |
+    | turnovers | Turnovers | 12: The team committed 12 turnovers. |
+    | total_rebounds | Total Rebounds | 41: The team grabbed a total of 41 rebounds. |
+    | two_points_made | Two Points Made by the team | 16: The team made 16 two-point shots. |
+    | field_goals_made | Field Goals Made by the team | 32: The team made 32 field goals. |
+    | free_throws_made | Free Throws Made by the team | 14: The team made 14 free throws. |
+    | three_points_made | Three Points Made by the team | 16: The team made 16 three-point shots. |
+    | defensive_rebounds | Defensive Rebounds: This occurs when a player from the defending team retrieves the ball after the opposing team misses a shot. | 28: The team grabbed 28 defensive rebounds. |
+    | offensive_rebounds | Offensive Rebounds: This occurs when a player from the attacking team retrieves the ball after their team misses a shot. | 13: The team grabbed 13 offensive rebounds. |
+    | two_point_percentage | Two-Point Percentage by the team | 44.44: The team made 44.44% of their two-point attempts. |
+    | two_points_attempted | Two Points Attempted by the team | 36: The team attempted 36 two-point shots. |
+    | field_goals_attempted | Field Goals Attempted by the team | 88: The team attempted 88 field goals. |
+    | free_throws_attempted | Free Throws Attempted by the team | 22: The team attempted 22 free throws. |
+    | three_points_attempted | Three Points Attempted by the team | 52: The team attempted 52 three-point shots. |
+    
+    ### Basketball Player Stats Box score values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | fouls | a foul is an infraction of the rules more serious than a violation. Fouls can be committed by both offensive and defensive players, and they can result in free throws or possession changes. | 3: The player committed 3 fouls in the game. |
+    | blocks | a "block" occurs when a defensive player legally deflects or stops an opponent's field goal attempt, preventing the ball from going into the basket.  | 0: The player made 0 blocks in the game. |
+    | player | Player Name | Iman Shumpert: The name of the player. |
+    | points | Points | 0: The player scored 0 points in the game. |
+    | status | Status | ACT: The player's current status is active. |
+    | steals | a "steal" occurs when a defensive player legally takes the ball away from an offensive player, leading to a change of possession. | 0: The player made 0 steals in the game. |
+    | assists | An assist is a statistic awarded to a player who passes the ball to a teammate in a way that leads directly to a score. | 0: The player made 0 assists in the game. |
+    | minutes | Minutes Played | 5:13: The player played for 5 minutes and 13 seconds. |
+    | position | Position | SG: The player’s position is shooting guard. |
+    | turnovers |  a "turnover" occurs when a team loses possession of the ball to the opposing team before a shot attempt is made. Turnovers are a critical aspect of the game as they directly impact a team's ability to score and can shift the momentum in favor of the opposing team. | 0: The player committed 0 turnovers in the game. |
+    | total_rebounds | Total Rebounds | 1: The player made 1 total rebound in the game. |
+    | two_points_made | Two-Point Shots Made | 0: The player made 0 two-point shots in the game. |
+    | field_goals_made | Field Goals Made by the Player | 0: The player made 0 field goals in the game. |
+    | free_throws_made | Free Throws Made by the player | 0: The player made 0 free throws in the game. |
+    | three_points_made | Three-Point Shots Made by the Player | 0: The player made 0 three-point shots in the game. |
+    | defensive_rebounds | Defensive Rebounds: This occurs when a player from the defending team retrieves the ball after the opposing team misses a shot. | 1: The player made 1 defensive rebound in the game. |
+    | offensive_rebounds | Offensive Rebounds: This occurs when a player from the attacking team retrieves the ball after their team misses a shot. | 0: The player made 0 offensive rebounds in the game. |
+    | two_point_percentage | Two-Point Percentage | 0: The player's two-point shot percentage. |
+    | two_points_attempted | Two-Point Shots Attempted by the player | 1: The player attempted 1 two-point shot in the game. |
+    | field_goals_attempted | Field Goals Attempted by the player | 2: The player attempted 2 field goals in the game. |
+    | free_throws_attempted | Free Throws Attempted by the player | 0: The player attempted 0 free throws in the game. |
+    | three_points_attempted | Three-Point Shots Attempted by the player | 1: The player attempted 1 three-point shot in the game. |
+    
+    ## Special Data Point Values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | "season_type" | These designations help categorize the games and stats according to the specific phase of the season. | • "Preseason"
+    • "Regular Season"
+    • "Postseason" |
+    | “status” | Indicates the status of the game according to that request date | "scheduled"
+    "delayed"
+    "postponed"
+    "suspended"
+    "canceled"
+    "inprogress"
+    "final"
+    "completed" |
+    | game_status | • Time Quarter (In-Game Status)
+    • Same as "game_time" before the game starts | Time Quarter 
+    "Final"
+    "Final OT" |
+- **Team Information**
+    
+    ### Description
+    
+    This endpoint allows users to retrieve team information updates for NBA games.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves team information from all NBA games, including details such as team_id, players, mascot, and more.
+        - **Why it exists**: Provides a comprehensive overview of teams participating in NBA games.
+    - **Use Cases**:
+        - Team information for more detailed understanding.
+        - The team information can be used for teams associated with Players, which can be useful for more specific detail queries like the box score results with the player_id, team_id, etc
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/team-info/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example: team_id=3 | OPTIONAL. |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/team-info/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/team-info/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=3**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`TEAM-INFO`"**
+    
+    ### Response
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+      "data": {
+        "NBA": [
+          {
+            "team_id": 1,
+            "team": "Minnesota Timberwolves",
+            "abbrv": "MIN",
+            "arena": "Target Center",
+            "mascot": "Timberwolves",
+            "conf": "Western Conference - Northwest",
+            "location": "Minneapolis, Minnesota"
+          },
+          {
+            "team_id": 2,
+            "team": "Indiana Pacers",
+            "abbrv": "IND",
+            "arena": "Bankers Life Fieldhouse",
+            "mascot": "Pacers",
+            "conf": "Eastern Conference - Central",
+            "location": "Indianapolis, Indiana"
+          },
+          {
+            "team_id": 3,
+            "team": "Utah Jazz",
+            "abbrv": "UTAH",
+            "arena": "Vivint Smart Home Arena",
+            "mascot": "Jazz",
+            "conf": "Western Conference - Northwest",
+            "location": "Salt Lake City, Utah"
+          }
+        ]
+      }
+    }
+    ```
+    
+- **Team Season Stats**
+    
+    ## Description:
+    
+    This endpoint allows users to retrieve team season stats updates for NBA games for that requested season.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves team season stats for NBA games, including details such as team_id, team, box score, and more.
+        - **Why it exists**: Provides a comprehensive overview of teams’ stats in a particular season, if the year is mentioned in the endpoint or current year for NBA teams.
+    - **Use Cases**:
+        - **Strategic Planning**: Analyzed team performance box scores and other information for statistical and strategic purposes.
+        - **Performance Analysis:** The player and team Assess performance trends over a season, identifying periods of peak and poor performance.
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - In the Request URL, we recommend adding the DATE value instead of leaving it blank. If the DATE value is not added, the request will default to the current date's data. This ensures that you receive accurate and intended information.
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/team-stats/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **DATE** | YYYY | OPTIONAL. A parameter can be omitted and the request will return player stats for the current season. Specify the beginning of the sports season, ie: 2017-2018 season = 2017. |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example team_id=1 | OPTIONAL |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/team-stats/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/team-stats/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=1**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`TEAM-STATS`**"
+    
+    ### Response
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+      "data": {
+        "NBA": [
+          {
+            "team_id": 1,
+            "team": "Minnesota Timberwolves",
+            "regular_season": {
+              "fouls": 416,
+              "blocks": 107,
+              "points": 5093,
+              "steals": 166,
+              "assists": 401,
+              "turnovers": 270,
+              "games_played": 46,
+              "total_rebounds": 821,
+              "two_points_made": 8364,
+              "field_goals_made": 650,
+              "free_throws_made": 334,
+              "three_points_made": 180,
+              "defensive_rebounds": 636,
+              "offensive_rebounds": 185,
+              "two_point_percentage": null,
+              "two_points_attempted": 16176,
+              "field_goals_attempted": 1552,
+              "free_throws_attempted": 402,
+              "three_points_attempted": 571
+            },
+            "postseason": null
+          },
+          {
+            "team_id": 2,
+            "team": "Indiana Pacers",
+            "regular_season": {
+              "fouls": 369,
+              "blocks": 150,
+              "points": 4569,
+              "steals": 146,
+              "assists": 406,
+              "turnovers": 237,
+              "games_played": 42,
+              "total_rebounds": 856,
+              "two_points_made": 7607,
+              "field_goals_made": 714,
+              "free_throws_made": 355,
+              "three_points_made": 154,
+              "defensive_rebounds": 684,
+              "offensive_rebounds": 172,
+              "two_point_percentage": null,
+              "two_points_attempted": 15239,
+              "field_goals_attempted": 1647,
+              "free_throws_attempted": 427,
+              "three_points_attempted": 457
+            },
+            "postseason": {
+              "fouls": 80,
+              "blocks": 14,
+              "points": 367,
+              "steals": 33,
+              "assists": 83,
+              "turnovers": 45,
+              "games_played": 4,
+              "total_rebounds": 161,
+              "two_points_made": 1034,
+              "field_goals_made": 134,
+              "free_throws_made": 59,
+              "three_points_made": 40,
+              "defensive_rebounds": 129,
+              "offensive_rebounds": 32,
+              "two_points_attempted": 2365,
+              "field_goals_attempted": 334,
+              "free_throws_attempted": 82,
+              "three_points_attempted": 119
+            }
+          },
+          {
+            "team_id": 3,
+            "team": "Utah Jazz",
+            "regular_season": {
+              "fouls": 401,
+              "blocks": 64,
+              "points": 5007,
+              "steals": 217,
+              "assists": 386,
+              "turnovers": 314,
+              "games_played": 45,
+              "total_rebounds": 668,
+              "two_points_made": 7640,
+              "field_goals_made": 627,
+              "free_throws_made": 266,
+              "three_points_made": 145,
+              "defensive_rebounds": 495,
+              "offensive_rebounds": 173,
+              "two_point_percentage": null,
+              "two_points_attempted": 13893,
+              "field_goals_attempted": 1470,
+              "free_throws_attempted": 405,
+              "three_points_attempted": 502
+            },
+            "postseason": {
+              "fouls": 109,
+              "blocks": 27,
+              "points": 489,
+              "steals": 46,
+              "assists": 115,
+              "turnovers": 73,
+              "games_played": 5,
+              "total_rebounds": 236,
+              "two_points_made": 1386,
+              "field_goals_made": 173,
+              "free_throws_made": 96,
+              "three_points_made": 47,
+              "defensive_rebounds": 177,
+              "offensive_rebounds": 59,
+              "two_points_attempted": 2783,
+              "field_goals_attempted": 432,
+              "free_throws_attempted": 128,
+              "three_points_attempted": 179
+            }
+          }
+        ]
+      }
+    }
+    ```
+    
+    ### **Basketball** team statistics **box score values:**
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | fouls | A foul is an infraction of the rules more serious than a violation. Fouls can be committed by both offensive and defensive players, and they can result in free throws or possession changes. | 109: The team committed 109 fouls. |
+    | blocks | a "block" occurs when a defensive player legally deflects or stops an opponent's field goal attempt, preventing the ball from going into the basket.  | 27: The team made 27 blocks. |
+    | points | Total points scored | 489: The team scored 489 points. |
+    | steals | a "steal" occurs when a defensive player legally takes the ball away from an offensive player, leading to a change of possession. | 46: The team made 46 steals. |
+    | assists | An assist is a statistic awarded to a player who passes the ball to a teammate in a way that leads directly to a score. | 115: The team made 115 assists. |
+    | turnovers | Total turnovers committed by the team | 73: The team committed 73 turnovers. |
+    | games_played | Total games played by a team | 5: The team played 5 games. |
+    | total_rebounds | Total rebounds grabbed by the team | 236: The team grabbed a total of 236 rebounds. |
+    | two_points_made | Two-point shots made by the team | 1386: The team made 1386 two-point shots. |
+    | field_goals_made | Total field goals made | 173: The team made 173 field goals. |
+    | free_throws_made | Free throws made by the team | 96: The team made 96 free throws. |
+    | three_points_made | Three-point shots made by the team | 47: The team made 47 three-point shots. |
+    | defensive_rebounds | Defensive Rebounds: This occurs when a player from the defending team retrieves the ball after the opposing team misses a shot. | 177: The team grabbed 177 defensive rebounds. |
+    | offensive_rebounds | Offensive Rebounds: This occurs when a player from the attacking team retrieves the ball after their team misses a shot. | 59: The team grabbed 59 offensive rebounds. |
+    | two_points_attempted | Two-point shots attempted | 2783: The team attempted 2783 two-point shots. |
+    | field_goals_attempted | Total field goals attempted | 432: The team attempted 432 field goals. |
+    | free_throws_attempted | Free throws attempted | 128: The team attempted 128 free throws. |
+    | three_points_attempted | Three-point shots attempted | 179: The team attempted 179 three-point shots. |
+    
+    ### **Special Data Point Values:**
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | "postseason" | null (If no data is available)
+    Object (Same structure as "regular_season") | • null 
+    • Object |
+- **Player Information**
+    
+    ## Description:
+    
+    This endpoint allows users to retrieve player information updates for NBA games.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves player information related to NBA games for the season, including details such as player ID, games played, team, and more.
+        - **Why it exists**: Provides a comprehensive overview of player information for NBA games, helping users analyze performance and make informed decisions.
+    - **Use Cases**:
+        - Understanding player position and team for informative purposes.
+        - The player information can be used for players associated with a team, and position played, which can be useful for more specific detail queries like the box score results with the player_id, etc
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-info/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example: team_id=1 | OPTIONAL |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-info/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-info/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=1**
+    
+    **Special header in the response**: **"`RS-DATA-TYPE`": "`PLAYER-INFO`"**
+    
+    ### Response
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+      "data": {
+        "NBA": [
+          {
+            "player_id": 1,
+            "player": "Tyler Zeller",
+            "team_id": 11,
+            "team": "Memphis Grizzlies",
+            "number": 45,
+            "status": "INACT",
+            "position": "C",
+            "position_category": "C",
+            "height": "7' 0\"",
+            "weight": 259,
+            "age": "January 17, 1990",
+            "college": "North Carolina"
+          },
+          {
+            "player_id": 2,
+            "player": "Avery Bradley",
+            "team_id": 12,
+            "team": "Los Angeles Lakers",
+            "number": 11,
+            "status": "ACT",
+            "position": "SG",
+            "position_category": "G",
+            "height": "6' 2\"",
+            "weight": 180,
+            "age": "November 26, 1990",
+            "college": "Texas"
+          },
+          {
+            "player_id": 3,
+            "player": "Jae Crowder",
+            "team_id": 11,
+            "team": "Memphis Grizzlies",
+            "number": 99,
+            "status": "ACT",
+            "position": "SF",
+            "position_category": "F",
+            "height": "6' 6\"",
+            "weight": 235,
+            "age": "July 6, 1990",
+            "college": "Marquette"
+          },
+          {
+            "player_id": 4,
+            "player": "John Holland",
+            "team_id": 7,
+            "team": "Cleveland Cavaliers",
+            "number": 10,
+            "status": "INACT",
+            "position": "SG",
+            "position_category": "G",
+            "height": "\t",
+            "weight": 0,
+            "age": "November 5, 1988",
+            "college": "Boston University"
+          },
+          {
+            "player_id": 5,
+            "player": "R.J. Hunter",
+            "team_id": 6,
+            "team": "Boston Celtics",
+            "number": 4,
+            "status": "INACT",
+            "position": "SG",
+            "position_category": "G",
+            "height": "6' 6\"",
+            "weight": 190,
+            "age": "October 24, 1993",
+            "college": "Georgia State"
+          }
+        ]
+      }
+    }
+    ```
+    
+    ### Special Data Point Values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | “status” | • “INACT”- payer is inactive 
+    • “ACT”- player is active
+    • “QUES”- “questionable”  | • INACT
+    • ACT
+    • QUES |
+- **Player Season Stats**
+    
+    ## Description:
+    
+    This endpoint allows users to retrieve player season stats updates for NBA games for the used year.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves player season stats related to NBA games for the year indicated in the request, including details such as player ID, Box scores, Player performance, and more.
+        - **Why it exists**: Provides a comprehensive overview of player performance in requested season using box score for NBA games, helping users analyze performance and make informed decisions.
+    - **Use Cases**:
+        - **Strategic Planning**: Analyzed player performance box scores, positions, and related information for statistical and strategic purposes.
+        - **Performance Analysis:** The player performance trends over a season, identifying peak and poor performance periods.
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - In the Request URL, we recommend adding the DATE value instead of leaving it blank. If the DATE value is not added, the request will default to the current year data. This ensures that you receive accurate and intended information.
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-stats/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-stats/<`DATE`>/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&player_id=<`PLAYER_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **DATE** | YYYY | OPTIONAL. A parameter can be omitted and the request will return player stats for the current season. Specify the beginning of the sports season, ie: 2017-2018 season = 2017. |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id OR player_id** | one specified team ID or player ID,
+    Example: team_id=7, player_id=3 | OPTIONAL.  |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-stats/2023/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-stats/2023/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=7**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/player-stats/2023/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&player_id=3**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`PLAYER-STATS`"**
+    
+    ### Response
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+        "data": {
+            "NBA": [
+                {
+                    "player_id": 3,
+                    "player": "Jae Crowder",
+                    "team": "Milwaukee Bucks",
+                    "team_id": 25,
+                    "regular_season": {
+                        "fouls": 74,
+                        "blocks": 9,
+                        "points": 312,
+                        "steals": 38,
+                        "assists": 66,
+                        "minutes": 69342,
+                        "turnovers": 23,
+                        "games_played": 50,
+                        "total_rebounds": 161,
+                        "two_points_made": 56,
+                        "field_goals_made": 114,
+                        "free_throws_made": 26,
+                        "three_points_made": 58,
+                        "defensive_rebounds": 130,
+                        "offensive_rebounds": 31,
+                        "two_point_percentage": 0.54,
+                        "two_points_attempted": 104,
+                        "field_goals_attempted": 270,
+                        "free_throws_attempted": 36,
+                        "three_points_attempted": 166
+                    },
+                    "postseason": {
+                        "fouls": 4,
+                        "blocks": 2,
+                        "points": 9,
+                        "steals": 0,
+                        "assists": 2,
+                        "minutes": 2512,
+                        "turnovers": 0,
+                        "games_played": 4,
+                        "total_rebounds": 6,
+                        "two_points_made": 2,
+                        "field_goals_made": 3,
+                        "free_throws_made": 2,
+                        "three_points_made": 1,
+                        "defensive_rebounds": 4,
+                        "offensive_rebounds": 2,
+                        "two_point_percentage": 0.4,
+                        "two_points_attempted": 5,
+                        "field_goals_attempted": 12,
+                        "free_throws_attempted": 2,
+                        "three_points_attempted": 7
+                    }
+                },
+                {
+                    "player_id": 9,
+                    "player": "Kelly Olynyk",
+                    "team": "Toronto Raptors",
+                    "team_id": 30,
+                    "regular_season": {
+                        "fouls": 226,
+                        "blocks": 30,
+                        "points": 749,
+                        "steals": 74,
+                        "assists": 344,
+                        "minutes": 105529,
+                        "turnovers": 150,
+                        "games_played": 78,
+                        "total_rebounds": 405,
+                        "two_points_made": 216,
+                        "field_goals_made": 276,
+                        "free_throws_made": 150,
+                        "three_points_made": 60,
+                        "defensive_rebounds": 299,
+                        "offensive_rebounds": 108,
+                        "two_point_percentage": 0.63,
+                        "two_points_attempted": 342,
+                        "field_goals_attempted": 497,
+                        "free_throws_attempted": 180,
+                        "three_points_attempted": 155
+                    },
+                    "postseason": null
+                },
+                {
+                    "player_id": 10,
+                    "player": "Terry Rozier",
+                    "team": "Miami Heat",
+                    "team_id": 20,
+                    "regular_season": {
+                        "fouls": 99,
+                        "blocks": 21,
+                        "points": 1166,
+                        "steals": 63,
+                        "assists": 334,
+                        "minutes": 122421,
+                        "turnovers": 106,
+                        "games_played": 61,
+                        "total_rebounds": 244,
+                        "two_points_made": 293,
+                        "field_goals_made": 442,
+                        "free_throws_made": 172,
+                        "three_points_made": 149,
+                        "defensive_rebounds": 209,
+                        "offensive_rebounds": 35,
+                        "two_point_percentage": 0.5,
+                        "two_points_attempted": 588,
+                        "field_goals_attempted": 998,
+                        "free_throws_attempted": 198,
+                        "three_points_attempted": 410
+                    },
+                    "postseason": null
+                }
+            ]
+        }
+    }
+    ```
+    
+    ### Baseball player statistics Box score Values :
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | player_id | Player ID | 3: The ID assigned to the player. |
+    | player | Player Name | Jae Crowder |
+    | team | Team Name | Milwaukee Bucks: The team the player is on. |
+    | team_id | Team ID | 25: The ID assigned to the team. |
+    | fouls | a foul is an infraction of the rules more serious than a violation. Fouls can be committed by both offensive and defensive players, and they can result in free throws or possession changes. | 74: The player committed 74 fouls. |
+    | blocks | a "block" occurs when a defensive player legally deflects or stops an opponent's field goal attempt, preventing the ball from going into the basket.  | 9: The player made 9 blocks. |
+    | points | Total points scored | 312: The player scored 312 points. |
+    | steals | a "steal" occurs when a defensive player legally takes the ball away from an offensive player, leading to a change of possession. | 38: The player made 38 steals. |
+    | assists | An assist is a statistic awarded to a player who passes the ball to a teammate in a way that leads directly to a score. | 66: The player made 66 assists. |
+    | minutes | Total minutes played | 69342: The player played a total of 69342 minutes. |
+    | turnovers |  a "turnover" occurs when a team loses possession of the ball to the opposing team before a shot attempt is made. Turnovers are a critical aspect of the game as they directly impact a team's ability to score and can shift the momentum in favor of the opposing team. | 23: The player committed 23 turnovers. |
+    | games_played | Total games played | 50: The player played in 50 games. |
+    | total_rebounds | Total rebounds grabbed | 161: The player grabbed a total of 161 rebounds. |
+    | two_points_made | Two-point shots made | 56: The player made 56 two-point shots. |
+    | field_goals_made | Total field goals made | 114: The player made 114 field goals. |
+    | free_throws_made | Free throws made by player | 26: The player made 26 free throws. |
+    | three_points_made | Three-point shots made | 58: The player made 58 three-point shots. |
+    | defensive_rebounds | Defensive Rebounds: This occurs when a player from the defending team retrieves the ball after the opposing team misses a shot. | 130: The player grabbed 130 defensives. |
+    | offensive_rebounds | Offensive Rebounds: This occurs when a player from the attacking team retrieves the ball after their team misses a shot. | 31: The player grabbed 31 offensive rebounds. |
+    | two_point_percentage | Two-point shot percentage | 0.54: The player made 54% of their two-point shot attempts. |
+    | two_points_attempted | Two-point shots attempted | 104: The player attempted 104 two-point shots. |
+    | field_goals_attempted | Total field goals attempted | 270: The player attempted 270 field goals. |
+    | free_throws_attempted | Free throws attempted | 36: The player attempted 36 free throws. |
+    | three_points_attempted | Three-point shots attempted | 166: The player attempted 166 three-point shots. |
+    
+    ### Special Data Point Values :
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | Season
+        ◦  “postseason
+        ◦  “regular_season” | • null: no data available
+    • Object | • “postseason”: null |
+- **Injuries**
+    
+    ## Description:
+    
+    This endpoint allows users to retrieve players’ injury updates for NBA games.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves player injury statuses related to NBA games, including details such as player ID, type of injury, status, team, and more.
+        - **Why it exists**: Provides a comprehensive overview of player injuries for NBA games, helping users stay informed about player availability and health.
+    - **Use Cases**:
+        - According to the type of injury and related information give availability of the player for future games.
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/injuries/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example team_id=3 | OPTIONAL. One single sport MUST be specified if using this parameter. |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/injuries/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/injuries/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=3**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`INJURY-REPORTS`"**
+    
+    ### Response
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+      "data": {
+        "NBA": [
+          {
+            "team": "Minnesota Timberwolves",
+            "team_id": 1,
+            "injuries": [
+              {
+                "injury": "Ankle",
+                "player": "Jeff Teague",
+                "returns": "On Track For Training Camp",
+                "player_id": "31",
+                "date_injured": "2019-3-12"
+              },
+              {
+                "injury": "Knee surgery",
+                "player": "Robert Covington",
+                "returns": "On Track For Training Camp",
+                "player_id": "333",
+                "date_injured": "2019-1-1"
+              }
+            ]
+          },
+          {
+            "team": "Indiana Pacers",
+            "team_id": 2,
+            "injuries": [
+              {
+                "injury": "Foot",
+                "player": "Edmond Sumner",
+                "returns": "Probable For Training Camp",
+                "player_id": "696",
+                "date_injured": "2019-8-1"
+              },
+              {
+                "injury": "Personal",
+                "player": "Tyreke Evans",
+                "returns": "Out Until 2020 21 Season",
+                "player_id": "279",
+                "date_injured": "2019-5-17"
+              },
+              {
+                "injury": "Knee surgery",
+                "player": "Victor Oladipo",
+                "returns": "December",
+                "player_id": "326",
+                "date_injured": "2019-1-23"
+              }
+            ]
+          },
+          {
+            "team": "Utah Jazz",
+            "team_id": 3,
+            "injuries": [
+              {
+                "injury": "Knee",
+                "player": "Dante Exum",
+                "returns": "Training Camp",
+                "player_id": "423",
+                "date_injured": "2019-3-14"
+              }
+            ]
+          }
+        ]
+      }
+    }
+    ```
+    
+    ## Special Data Point Values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | “date_injured” | The date at which the player got injured | “yyyy-m-d” |
+    | “injury” | Type of Injury  |  ◦  “Knee”
+     ◦  “Heel” |
+- **Depth Charts**
+    
+    ## Description:
+    
+    This endpoint allows users to retrieve the list of players at each position for each team update for NBA games.
+    
+    - **Purpose of the Endpoint**:
+        - **What it does**: Retrieves a list of players at each position, with the starter or first-string player listed first, followed by replacement and platoon players. for a particular team related to NBA games for that season, including details such as the team, player ID, position, and more.
+        - **Why it exists**: Provides a comprehensive overview of the actual position locations of certain players for NBA games, helping users stay informed about team compositions and player information.
+    - **Use Cases**:
+        - **Performance Tracking**: Enables player performance tracking relative to their position on the depth chart.
+    - **Best Practices and Tips**:
+        - Use the correct endpoint without any spaces. Endpoint names are case-sensitive.
+        - For NBA games, use "NBA" as the sport identifier followed by your `RSC_token` (required).
+        - For detailed information on obtaining and using the `RSC_token`, please contact our support team.
+    
+    ### Request URL Structure:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/depth-charts/<`SPORT`>?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=<`TEAM_ID`>**
+    
+    | Parameter | Format | Info |
+    | --- | --- | --- |
+    | **SPORT** | NBA | REQUIRED |
+    | **RSC_token** | special token string appointed to your account | REQUIRED |
+    | **team_id** | one specified team ID,
+    Example: team_id=3 | OPTIONAL |
+    
+    ---
+    
+    ### URL Examples:
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/depth-charts/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>&team_id=3**
+    
+    **http://rest.datafeeds.rolling-insights.com/api/v1/depth-charts/NBA?RSC_token=<`YOUR_RSC_TOKEN_HERE`>**
+    
+    **Special header in the response: "`RS-DATA-TYPE`": "`DEPTH-CHARTS`**"
+    
+    ### Response
+    
+    | Status | Format | Info |
+    | --- | --- | --- |
+    | **200** | **`Content-Type`**: **`application/json`** | Returns data in JSON format when there is data available. |
+    | **404** | **`Content-Type`**: **`text/plain`** | Returns data in plain text with a descriptive error if anything is wrong with the request. |
+    | **304** | NONE | No data will be returned if you have received the latest update. |
+    
+    ## **Sample Feed (truncated):**
+    
+    ```json
+    {
+      "data": {
+        "NBA": {
+          "Minnesota Timberwolves": {
+            "C": {
+              "1": {
+                "id": 267,
+                "player": "Karl-Anthony Towns"
+              },
+              "2": {
+                "id": 256,
+                "player": "Gorgui Dieng"
+              },
+              "3": {
+                "id": 686,
+                "player": "Jordan Bell"
+              }
+            },
+            "PF": {
+              "1": {
+                "id": 333,
+                "player": "Robert Covington"
+              },
+              "2": {
+                "id": 686,
+                "player": "Jordan Bell"
+              },
+              "3": {
+                "id": 374,
+                "player": "Noah Vonleh"
+              }
+            },
+            "PG": {
+              "1": {
+                "id": 31,
+                "player": "Jeff Teague"
+              },
+              "2": {
+                "id": 324,
+                "player": "Shabazz Napier"
+              }
+            },
+            "SF": {
+              "1": {
+                "id": 627,
+                "player": "Jake Layman"
+              },
+              "2": {
+                "id": 872,
+                "player": "Josh Okogie"
+              }
+            },
+            "SG": {
+              "1": {
+                "id": 268,
+                "player": "Andrew Wiggins"
+              },
+              "2": {
+                "id": 872,
+                "player": "Josh Okogie"
+              }
+            },
+            "team_id": 1
+          },
+          "Indiana Pacers": {
+            "C": {
+              "1": {
+                "id": 179,
+                "player": "Myles Turner"
+              },
+              "2": {
+                "id": 624,
+                "player": "Domantas Sabonis"
+              },
+              "3": {
+                "id": 1049,
+                "player": "Goga Bitadze"
+              }
+            },
+            "PF": {
+              "1": {
+                "id": 624,
+                "player": "Domantas Sabonis"
+              },
+              "2": {
+                "id": 358,
+                "player": "T.J. Warren"
+              },
+              "3": {
+                "id": 693,
+                "player": "TJ Leaf"
+              }
+            },
+            "PG": {
+              "1": {
+                "id": 553,
+                "player": "Malcolm Brogdon"
+              },
+              "2": {
+                "id": 850,
+                "player": "Aaron Holiday"
+              },
+              "3": {
+                "id": 339,
+                "player": "T.J. McConnell"
+              }
+            },
+            "SF": {
+              "1": {
+                "id": 358,
+                "player": "T.J. Warren"
+              },
+              "2": {
+                "id": 56,
+                "player": "Jeremy Lamb"
+              },
+              "3": {
+                "id": 69,
+                "player": "Justin Holiday"
+              }
+            },
+            "SG": {
+              "1": {
+                "id": 326,
+                "player": "Victor Oladipo"
+              },
+              "2": {
+                "id": 56,
+                "player": "Jeremy Lamb"
+              },
+              "3": {
+                "id": 696,
+                "player": "Edmond Sumner"
+              }
+            },
+            "team_id": 2
+          },
+          "Utah Jazz": {
+            "C": {
+              "1": {
+                "id": 425,
+                "player": "Rudy Gobert"
+              },
+              "2": {
+                "id": 364,
+                "player": "Ed Davis"
+              },
+              "3": {
+                "id": 764,
+                "player": "Tony Bradley"
+              }
+            },
+            "PF": {
+              "1": {
+                "id": 428,
+                "player": "Joe Ingles"
+              },
+              "2": {
+                "id": 201,
+                "player": "Jeff Green"
+              },
+              "3": {
+                "id": 551,
+                "player": "Georges Niang"
+              }
+            },
+            "PG": {
+              "1": {
+                "id": 216,
+                "player": "Mike Conley"
+              },
+              "2": {
+                "id": 117,
+                "player": "Emmanuel Mudiay"
+              },
+              "3": {
+                "id": 423,
+                "player": "Dante Exum"
+              }
+            },
+            "SF": {
+              "1": {
+                "id": 32,
+                "player": "Bojan Bogdanovic"
+              },
+              "2": {
+                "id": 767,
+                "player": "Royce O'Neale"
+              },
+              "3": {
+                "id": 428,
+                "player": "Joe Ingles"
+              }
+            },
+            "SG": {
+              "1": {
+                "id": 766,
+                "player": "Donovan Mitchell"
+              },
+              "2": {
+                "id": 423,
+                "player": "Dante Exum"
+              },
+              "3": {
+                "id": 428,
+                "player": "Joe Ingles"
+              }
+            },
+            "team_id": 3
+          }
+        }
+      }
+    }
+    ```
+    
+    ### Special Data Point Values:
+    
+    | Parameter | Description | Example |
+    | --- | --- | --- |
+    | Position | Indicate the player’s position on the field. | “SF”, “PG”, “C”, “PF”
+     |
+    | Ranking | The number indicates different rankings for that position. | “1”, “2”,”3” |
