@@ -9,14 +9,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 class BaseAgent:
-    def __init__(self, name: str, system_prompt: str, model: str = "gpt-4o", base_url: str = None, temperature: float = 0.5):
+    def __init__(self, name: str, system_prompt: str, model: str = "gpt-4o", base_url: str = None, temperature: float = 0.5, api_key: str = None):
         self.name = name
         self.system_prompt = system_prompt
         self.model = model
         self.temperature = temperature
         self.max_completion_tokens = 128000
         self.client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
+            api_key=api_key or os.getenv("OPENAI_API_KEY"),
             base_url=base_url
         )
         

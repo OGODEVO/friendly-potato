@@ -9,9 +9,13 @@ api:
 agents:
   agent_1:
     name: "Analyst_01"
-    role: "Quantitative Analyst"
-    model: "gpt-5.1" # Change this key to switch models dynamically
+    role: "The Sharp"
+    model: "gpt-5.1"
+    provider: "openai"
+    
   agent_2:
     name: "Strategist_01"
-    role: "Betting Strategist"
-    model: "gpt-5.1" # Change this key to switch models dynamically
+    role: "The Contrarian"
+    model: "moonshotai/kimi-k2.5"
+    provider: "novita"
+    base_url: "https://api.novita.ai/openai"

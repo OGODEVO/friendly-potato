@@ -21,20 +21,28 @@ def load_config():
         return yaml.safe_load(f)
 
 config = load_config()
-base_url = config['system'].get('llm_base_url')
-analyst_model = config['agents']['agent_1']['model']
-strategist_model = config['agents']['agent_2']['model']
+base_url = config.get('system', {}).get('llm_base_url')
+
 
 # Initialize Agents
-analyst = AnalystAgent()
-analyst.model = analyst_model
-if base_url:
-    analyst.client.base_url = base_url
+analyst_config = config['agents']['agent_1']
+strategist_config = config['agents']['agent_2']
 
-strategist = StrategistAgent()
-strategist.model = strategist_model
-if base_url:
-    strategist.client.base_url = base_url
+# Analyst (Default OpenAI)
+analyst_kwargs = {}
+if analyst_config.get('provider') == 'openai' and base_url:
+    analyst_kwargs['base_url'] = base_url
+
+analyst = AnalystAgent(model=analyst_config['model'], **analyst_kwargs)
+
+# Strategist (Novita / Kimi)
+strategist_kwargs = {}
+if strategist_config.get('provider') == 'novita':
+    strategist_kwargs['base_url'] = strategist_config['base_url']
+    strategist_kwargs['api_key'] = os.getenv("NOVITA_API_KEY")
+
+strategist = StrategistAgent(model=strategist_config['model'], **strategist_kwargs)
+
 
 # Per-chat conversation histories
 chat_histories: dict[int, list] = {}
