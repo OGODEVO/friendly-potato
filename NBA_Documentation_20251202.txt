@@ -2171,4 +2171,4 @@
     | --- | --- | --- |
     | Position | Indicate the player’s position on the field. | “SF”, “PG”, “C”, “PF”
      |
-    | Ranking | The number indicates different rankings for that position. | “1”, “2”,”3” |
+    | Ranking | The number indicates different rankings for that position. | “1”, “2”,”3” |.
