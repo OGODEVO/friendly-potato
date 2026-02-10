@@ -1,5 +1,4 @@
-
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 import json
 from .nba_client import NBAClient
@@ -7,14 +6,17 @@ from .team_lookup import resolve_team
 
 client = NBAClient()
 
+# NBA schedules use US Eastern Time
+_ET = timezone(timedelta(hours=-5))
+
 def _get_today() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return datetime.now(_ET).strftime("%Y-%m-%d")
 
 def _get_current_season_year() -> str:
     # Simple logic: if month is > 9 (Oct), it's start of season (e.g. 2023 for 23-24). 
     # If month < 9, it's end of season (still 2023 for 23-24 season usually in API logic, check docs carefully).
     # Docs say: "2017-2018 season = 2017"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(_ET)
     if now.month >= 10:
         return str(now.year)
     else:
@@ -111,6 +113,8 @@ def get_live_scores(date: str = None, team_name: str = None) -> str:
                 "info": f"No games found for {team_name} on {date}.",
                 "suggestion": "Try a different date or check the weekly schedule."
             })
+        # API requires EITHER team_id OR game_id, not both
+        team_id = None
 
     data = client.get_live_data(date, team_id=team_id, game_id=game_id)
     return json.dumps(data)
