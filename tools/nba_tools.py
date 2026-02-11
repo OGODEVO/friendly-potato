@@ -24,6 +24,200 @@ def _get_current_season_year() -> str:
     else:
         return str(now.year - 1)
 
+
+def _to_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _safe_div(numerator: float, denominator: float) -> float:
+    if denominator == 0:
+        return 0.0
+    return numerator / denominator
+
+
+def _team_metrics_from_box(score: Any, team_stats: Dict[str, Any]) -> Dict[str, float]:
+    points = _to_float(score)
+    fgm = _to_float(team_stats.get("field_goals_made"))
+    fga = _to_float(team_stats.get("field_goals_attempted"))
+    tpm = _to_float(team_stats.get("three_points_made"))
+    tpa = _to_float(team_stats.get("three_points_attempted"))
+    fta = _to_float(team_stats.get("free_throws_attempted"))
+    orb = _to_float(team_stats.get("offensive_rebounds"))
+    turnovers = _to_float(team_stats.get("turnovers"))
+    possessions = fga + 0.44 * fta - orb + turnovers
+
+    return {
+        "points": points,
+        "eFG": round(_safe_div(fgm + 0.5 * tpm, fga), 4),
+        "threePA_rate": round(_safe_div(tpa, fga), 4),
+        "FT_rate": round(_safe_div(fta, fga), 4),
+        "estimated_possessions": round(possessions, 2),
+        "OffRtg_est": round(_safe_div(points * 100.0, possessions), 2),
+        "TO_rate": round(_safe_div(turnovers, possessions), 4),
+        "offensive_rebounds": int(orb),
+        "turnovers": int(turnovers),
+    }
+
+
+def _season_metrics(regular_season: Dict[str, Any]) -> Dict[str, float]:
+    fgm = _to_float(regular_season.get("field_goals_made"))
+    fga = _to_float(regular_season.get("field_goals_attempted"))
+    tpm = _to_float(regular_season.get("three_points_made"))
+    tpa = _to_float(regular_season.get("three_points_attempted"))
+    fta = _to_float(regular_season.get("free_throws_attempted"))
+    orb = _to_float(regular_season.get("offensive_rebounds"))
+    turnovers = _to_float(regular_season.get("turnovers"))
+    points = _to_float(regular_season.get("points"))
+    games_played = _to_float(regular_season.get("games_played"))
+    possessions = fga + 0.44 * fta - orb + turnovers
+
+    return {
+        "points_per_game": round(_safe_div(points, games_played), 2),
+        "eFG": round(_safe_div(fgm + 0.5 * tpm, fga), 4),
+        "threePA_rate": round(_safe_div(tpa, fga), 4),
+        "FT_rate": round(_safe_div(fta, fga), 4),
+        "OffRtg_est": round(_safe_div(points * 100.0, possessions), 2),
+        "TO_rate": round(_safe_div(turnovers, possessions), 4),
+        "offensive_rebounds_per_game": round(_safe_div(orb, games_played), 2),
+        "turnovers_per_game": round(_safe_div(turnovers, games_played), 2),
+        "games_played": int(games_played),
+    }
+
+
+def _delta_metrics(live_metrics: Dict[str, Any], season_metrics: Dict[str, Any]) -> Dict[str, float]:
+    keys = ["eFG", "threePA_rate", "FT_rate", "OffRtg_est", "TO_rate"]
+    delta: Dict[str, float] = {}
+    for key in keys:
+        if key in live_metrics and key in season_metrics:
+            delta[key] = round(_to_float(live_metrics[key]) - _to_float(season_metrics[key]), 4)
+    return delta
+
+
+def _extract_regular_season(team_stats_payload: Dict[str, Any]) -> Dict[str, Any]:
+    rows = team_stats_payload.get("data", {}).get("NBA", [])
+    if not isinstance(rows, list) or not rows:
+        return {}
+    row = rows[0]
+    regular = row.get("regular_season", {})
+    return regular if isinstance(regular, dict) else {}
+
+
+def _roster_summary(team_name: str) -> Dict[str, Any]:
+    team_id = resolve_team(team_name)
+    if not team_id:
+        return {"error": f"Could not resolve team '{team_name}'."}
+
+    player_info = client.get_player_info(team_id=team_id)
+    injuries = client.get_injuries(team_id=team_id)
+    depth_chart = client.get_depth_charts(team_id=team_id)
+
+    players = player_info.get("data", {}).get("NBA", [])
+    if not isinstance(players, list):
+        players = []
+    active_count = 0
+    inactive_count = 0
+    for player in players:
+        status = str(player.get("status", "")).upper()
+        if status == "INACT":
+            inactive_count += 1
+        else:
+            active_count += 1
+
+    injuries_rows = injuries.get("data", {}).get("NBA", [])
+    injury_list = []
+    if isinstance(injuries_rows, list) and injuries_rows:
+        injury_list = injuries_rows[0].get("injuries", []) or []
+
+    starters: Dict[str, str] = {}
+    depth_nba = depth_chart.get("data", {}).get("NBA", {})
+    team_depth = None
+    if isinstance(depth_nba, dict):
+        team_depth = depth_nba.get(team_name)
+        if team_depth is None and len(depth_nba) == 1:
+            team_depth = list(depth_nba.values())[0]
+    if isinstance(team_depth, dict):
+        for pos in ["PG", "SG", "SF", "PF", "C"]:
+            position_map = team_depth.get(pos, {})
+            if isinstance(position_map, dict) and "1" in position_map:
+                starters[pos] = position_map["1"].get("player", "Unknown")
+
+    return {
+        "team_name": team_name,
+        "team_id": team_id,
+        "roster_counts": {
+            "players_returned": len(players),
+            "active_or_unknown_status": active_count,
+            "inactive": inactive_count,
+        },
+        "injuries": {
+            "count": len(injury_list),
+            "players": [item.get("player") for item in injury_list[:10] if isinstance(item, dict)],
+        },
+        "projected_starters": starters,
+    }
+
+
+def _match_event_by_teams(events: list, home_team: str, away_team: str) -> Optional[Dict[str, Any]]:
+    home = home_team.lower().strip()
+    away = away_team.lower().strip()
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        h = str(event.get("home_team", "")).lower().strip()
+        a = str(event.get("away_team", "")).lower().strip()
+        if h == home and a == away:
+            return event
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        h = str(event.get("home_team", "")).lower().strip()
+        a = str(event.get("away_team", "")).lower().strip()
+        if (home in h and away in a) or (h in home and a in away):
+            return event
+    return None
+
+
+def _market_snapshot(home_team: str, away_team: str, regions: str, markets: str) -> Dict[str, Any]:
+    odds_data = odds_client.get_odds(
+        sport="basketball_nba",
+        regions=regions,
+        markets=markets,
+        date_format="iso",
+        odds_format="american",
+    )
+    if "error" in odds_data:
+        return odds_data
+
+    events = odds_data.get("data", [])
+    if not isinstance(events, list):
+        events = []
+    matched = _match_event_by_teams(events, home_team, away_team)
+    if not matched:
+        return {
+            "warning": "No matching odds event found for this matchup.",
+            "meta": odds_data.get("meta", {}),
+        }
+
+    book_count = len(matched.get("bookmakers", []) or [])
+    market_keys = []
+    if matched.get("bookmakers"):
+        first = matched["bookmakers"][0]
+        markets_block = first.get("markets", []) or []
+        market_keys = [m.get("key") for m in markets_block if isinstance(m, dict) and m.get("key")]
+
+    return {
+        "event_id": matched.get("id"),
+        "commence_time": matched.get("commence_time"),
+        "home_team": matched.get("home_team"),
+        "away_team": matched.get("away_team"),
+        "bookmakers_count": book_count,
+        "sample_market_keys": market_keys,
+        "meta": odds_data.get("meta", {}),
+    }
+
 # --- Agent Tools ---
 
 def get_daily_schedule(date: str = None, team_name: str = None) -> str:
@@ -223,6 +417,231 @@ def get_depth_chart(team_name: str) -> str:
     return json.dumps(data)
 
 
+def _depth_chart_team_block(depth_chart_payload: Dict[str, Any], team_name: str) -> Dict[str, Any]:
+    depth_nba = depth_chart_payload.get("data", {}).get("NBA", {})
+    if isinstance(depth_nba, dict):
+        if team_name in depth_nba and isinstance(depth_nba[team_name], dict):
+            return depth_nba[team_name]
+        if len(depth_nba) == 1:
+            only_value = list(depth_nba.values())[0]
+            if isinstance(only_value, dict):
+                return only_value
+    return {}
+
+
+def _rotation_players_from_depth(team_depth: Dict[str, Any], max_depth: int = 3) -> list[str]:
+    players: list[str] = []
+    seen = set()
+    for pos in ["PG", "SG", "SF", "PF", "C"]:
+        pos_map = team_depth.get(pos, {})
+        if not isinstance(pos_map, dict):
+            continue
+        for slot in sorted(pos_map.keys(), key=lambda k: int(k) if str(k).isdigit() else 999):
+            if str(slot).isdigit() and int(slot) > max_depth:
+                continue
+            item = pos_map.get(slot, {})
+            if not isinstance(item, dict):
+                continue
+            player = str(item.get("player", "")).strip()
+            if player and player not in seen:
+                seen.add(player)
+                players.append(player)
+    return players
+
+
+def get_roster_context(team_name: str, include_raw: bool = False) -> str:
+    """
+    Get a roster integrity bundle for one team with a cleaned summary by default.
+    The summary prioritizes depth chart + injuries to reduce stale/historical player noise.
+
+    Args:
+        team_name (str): Team name (e.g. "Lakers"). REQUIRED.
+        include_raw (bool): Include raw API payloads (player_info/depth_chart/injuries).
+    """
+    team_id = resolve_team(team_name)
+    if not team_id:
+        return f"Error: Could not resolve team '{team_name}'."
+
+    player_info = client.get_player_info(team_id=team_id)
+    depth_chart = client.get_depth_charts(team_id=team_id)
+    injuries = client.get_injuries(team_id=team_id)
+
+    players = player_info.get("data", {}).get("NBA", [])
+    if not isinstance(players, list):
+        players = []
+    active_players = [
+        p.get("player")
+        for p in players
+        if isinstance(p, dict) and str(p.get("status", "")).upper() != "INACT" and p.get("player")
+    ]
+    inactive_count = len(
+        [p for p in players if isinstance(p, dict) and str(p.get("status", "")).upper() == "INACT"]
+    )
+
+    team_depth = _depth_chart_team_block(depth_chart, team_name)
+    projected_starters: Dict[str, str] = {}
+    if isinstance(team_depth, dict):
+        for pos in ["PG", "SG", "SF", "PF", "C"]:
+            pos_map = team_depth.get(pos, {})
+            if isinstance(pos_map, dict) and "1" in pos_map and isinstance(pos_map["1"], dict):
+                projected_starters[pos] = pos_map["1"].get("player", "Unknown")
+    rotation_players = _rotation_players_from_depth(team_depth, max_depth=3)
+
+    injuries_rows = injuries.get("data", {}).get("NBA", [])
+    injury_list = []
+    if isinstance(injuries_rows, list) and injuries_rows:
+        injury_list = injuries_rows[0].get("injuries", []) or []
+    injury_players = [i.get("player") for i in injury_list if isinstance(i, dict) and i.get("player")]
+
+    payload: Dict[str, Any] = {
+        "team_name": team_name,
+        "team_id": team_id,
+        "summary": {
+            "projected_starters": projected_starters,
+            "rotation_players_depth_1_to_3": rotation_players,
+            "active_players_from_player_info": active_players,
+            "injury_players": injury_players,
+            "counts": {
+                "player_info_rows": len(players),
+                "player_info_inactive_rows": inactive_count,
+                "injury_count": len(injury_players),
+            },
+            "source_quality_note": (
+                "Depth chart + injuries are prioritized for current roster calls. "
+                "player_info may include inactive/historical rows."
+            ),
+        },
+    }
+
+    if include_raw:
+        payload["raw"] = {
+            "player_info": player_info,
+            "depth_chart": depth_chart,
+            "injuries": injuries,
+        }
+
+    return json.dumps(payload)
+
+
+def get_live_vs_season_context(
+    team_name: str,
+    date: str = None,
+    year: str = None,
+    include_roster: bool = True,
+    include_market: bool = True,
+    regions: str = "us",
+    markets: str = "h2h,spreads,totals",
+) -> str:
+    """
+    Unified workflow tool:
+    1) Finds the team's game on the requested date
+    2) Pulls live/final box stats for that game
+    3) Pulls season team stats for both teams
+    4) Computes live-vs-season metric deltas
+    5) Optionally attaches roster and market snapshots
+    """
+    if not date:
+        date = _get_today()
+    if not year:
+        year = _get_current_season_year()
+
+    target_team_id = resolve_team(team_name)
+    if not target_team_id:
+        return json.dumps({"error": f"Could not resolve team '{team_name}'."})
+
+    schedule_data = client.get_schedule(date, team_id=target_team_id)
+    games = schedule_data.get("data", {}).get("NBA", [])
+    if not isinstance(games, list) or not games:
+        return json.dumps({
+            "error": f"No scheduled game found for {team_name} on {date}.",
+            "schedule_result": schedule_data,
+        })
+
+    game = games[0]
+    game_id = game.get("game_ID")
+    if not game_id:
+        return json.dumps({"error": "Could not determine game_ID from schedule.", "schedule_game": game})
+
+    live_data = client.get_live_data(date, game_id=game_id)
+    live_games = live_data.get("data", {}).get("NBA", [])
+    if not isinstance(live_games, list) or not live_games:
+        return json.dumps({
+            "error": f"Live/box data not available for game_id {game_id}.",
+            "live_result": live_data,
+        })
+
+    game_box = live_games[0]
+    full_box = game_box.get("full_box", {})
+    home_box = full_box.get("home_team", {})
+    away_box = full_box.get("away_team", {})
+
+    home_name = game_box.get("home_team_name") or game.get("home_team")
+    away_name = game_box.get("away_team_name") or game.get("away_team")
+    home_id = home_box.get("team_id") or game.get("home_team_ID")
+    away_id = away_box.get("team_id") or game.get("away_team_ID")
+
+    home_season_raw = client.get_team_stats(year, team_id=home_id) if home_id else {}
+    away_season_raw = client.get_team_stats(year, team_id=away_id) if away_id else {}
+
+    home_regular = _extract_regular_season(home_season_raw) if isinstance(home_season_raw, dict) else {}
+    away_regular = _extract_regular_season(away_season_raw) if isinstance(away_season_raw, dict) else {}
+
+    home_live_metrics = _team_metrics_from_box(home_box.get("score"), home_box.get("team_stats", {}))
+    away_live_metrics = _team_metrics_from_box(away_box.get("score"), away_box.get("team_stats", {}))
+    home_season_metrics = _season_metrics(home_regular)
+    away_season_metrics = _season_metrics(away_regular)
+
+    response: Dict[str, Any] = {
+        "query": {
+            "team_name": team_name,
+            "team_id": target_team_id,
+            "date": date,
+            "season_year": year,
+        },
+        "game": {
+            "game_id": game_id,
+            "event_name": game_box.get("event_name") or game.get("event_name"),
+            "status": game_box.get("status") or game.get("status"),
+            "game_status": game_box.get("game_status"),
+            "quarter": full_box.get("current", {}).get("Quarter"),
+            "time_remaining": full_box.get("current", {}).get("TimeRemaining"),
+            "home_team": home_name,
+            "away_team": away_name,
+            "home_score": home_box.get("score"),
+            "away_score": away_box.get("score"),
+        },
+        "live_vs_season": {
+            "home": {
+                "team": home_name,
+                "live_metrics": home_live_metrics,
+                "season_metrics": home_season_metrics,
+                "delta_live_minus_season": _delta_metrics(home_live_metrics, home_season_metrics),
+            },
+            "away": {
+                "team": away_name,
+                "live_metrics": away_live_metrics,
+                "season_metrics": away_season_metrics,
+                "delta_live_minus_season": _delta_metrics(away_live_metrics, away_season_metrics),
+            },
+        },
+        "notes": [
+            "Use delta_live_minus_season for regression/context checks.",
+            "Live/final team_stats are game-level; season metrics are full-season baselines.",
+        ],
+    }
+
+    if include_roster:
+        if home_name:
+            response.setdefault("roster", {})["home"] = _roster_summary(home_name)
+        if away_name:
+            response.setdefault("roster", {})["away"] = _roster_summary(away_name)
+
+    if include_market and home_name and away_name:
+        response["market"] = _market_snapshot(home_name, away_name, regions=regions, markets=markets)
+
+    return json.dumps(response)
+
+
 def get_market_odds(
     sport: str = "basketball_nba",
     regions: str = "us",
@@ -324,6 +743,26 @@ TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
+            "name": "get_live_vs_season_context",
+            "description": "Best-practice live workflow: game snapshot + live team metrics + season baselines + deltas (+ optional roster and market context).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "team_name": {"type": "string", "description": "Team name (e.g. 'Lakers'). REQUIRED."},
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD. Default: Today (ET)."},
+                    "year": {"type": "string", "description": "Season start year. Defaults to current season."},
+                    "include_roster": {"type": "boolean", "description": "Include roster summaries for both teams."},
+                    "include_market": {"type": "boolean", "description": "Include market snapshot for this matchup."},
+                    "regions": {"type": "string", "description": "Odds regions when include_market=true (e.g. 'us')."},
+                    "markets": {"type": "string", "description": "Odds markets when include_market=true (e.g. 'h2h,spreads,totals')."}
+                },
+                "required": ["team_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_team_stats",
             "description": "Get season stats for a team.",
             "parameters": {
@@ -331,6 +770,19 @@ TOOLS_SCHEMA = [
                 "properties": {
                     "team_name": {"type": "string", "description": "Team name (e.g. 'Denver')."},
                     "year": {"type": "string", "description": "Season start year. DO NOT SET THIS unless the user asks for a specific past season. Current season is used automatically."}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_player_info",
+            "description": "Get player roster info for a team. Use this to verify current personnel.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "team_name": {"type": "string", "description": "Team name (e.g. 'Lakers'). Highly recommended."}
                 }
             }
         }
@@ -379,6 +831,21 @@ TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
+            "name": "get_roster_context",
+            "description": "Get cleaned roster context for a team (starters, rotation, injuries). Use this first for roster-sensitive analysis.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "team_name": {"type": "string", "description": "Team name (e.g. 'Lakers')."},
+                    "include_raw": {"type": "boolean", "description": "Set true only if raw payload debugging is needed."}
+                },
+                "required": ["team_name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_market_odds",
             "description": "Get live betting market odds (h2h/spreads/totals). Use this before making market-based claims.",
             "parameters": {
@@ -407,9 +874,12 @@ TOOLS_SCHEMA = [
 AVAILABLE_TOOLS = {
     "get_daily_schedule": get_daily_schedule,
     "get_live_scores": get_live_scores,
+    "get_live_vs_season_context": get_live_vs_season_context,
     "get_team_stats": get_team_stats,
+    "get_player_info": get_player_info,
     "get_player_stats": get_player_stats,
     "get_injuries": get_injuries,
     "get_depth_chart": get_depth_chart,
+    "get_roster_context": get_roster_context,
     "get_market_odds": get_market_odds
 }

@@ -5,6 +5,7 @@ import time
 import asyncio
 import logging
 import re
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 from telegram import Update
@@ -14,6 +15,7 @@ import yaml
 
 from agents.analyst import AnalystAgent
 from agents.strategist import StrategistAgent
+from agents.base_agent import BaseAgent
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -46,15 +48,61 @@ if strategist_config.get('provider') == 'novita':
 
 strategist = StrategistAgent(model=strategist_config['model'], **strategist_kwargs)
 
+CHAT_PROMPT = """You are a helpful NBA assistant in normal chat mode.
+- Be conversational and concise.
+- Do not produce betting picks unless the user asks for analysis/picks.
+- If the user asks for betting analysis, acknowledge and proceed with analysis mode."""
+
+chat_agent = BaseAgent(
+    name="NBA Assistant",
+    system_prompt=CHAT_PROMPT,
+    model=analyst_config["model"],
+    temperature=0.3,
+    **analyst_kwargs,
+)
+
 
 # Per-chat conversation histories
 chat_histories: dict[int, list] = {}
+chat_modes: dict[int, str] = {}
 
 # Streaming config
 STREAM_EDIT_INTERVAL = 0.8  # seconds between Telegram message edits
 MIN_CHUNK_SIZE = 30          # min characters accumulated before editing
 TELEGRAM_SEND_RETRIES = 3
 TELEGRAM_BASE_RETRY_DELAY = 1.0
+
+ANALYSIS_KEYWORDS = [
+    "pick",
+    "bet",
+    "odds",
+    "spread",
+    "moneyline",
+    "ml",
+    "over",
+    "under",
+    "parlay",
+    "line",
+    "analyze",
+    "analysis",
+    "live",
+    "who wins",
+    "confidence",
+    "ev",
+]
+
+
+def _load_analysis_skill_text() -> str:
+    for candidate in [Path("SKILL.md"), Path("skill.md")]:
+        if candidate.exists():
+            try:
+                return candidate.read_text(encoding="utf-8").strip()
+            except Exception as exc:
+                logger.warning("Failed to read %s: %s", candidate, exc)
+    return ""
+
+
+ANALYSIS_SKILL_TEXT = _load_analysis_skill_text()
 
 
 async def _wait_before_retry(exc: Exception, attempt: int) -> None:
@@ -168,6 +216,34 @@ def _canonical_pick(value: Optional[str]) -> str:
     return re.sub(r"\s+", " ", norm).strip()
 
 
+def _has_analysis_intent(user_text: str) -> bool:
+    text = _normalize(user_text)
+    return any(keyword in text for keyword in ANALYSIS_KEYWORDS)
+
+
+def _resolve_chat_mode(chat_id: int, user_text: str) -> str:
+    mode = chat_modes.get(chat_id, "auto")
+    if mode == "analysis":
+        return "analysis"
+    if mode == "normal":
+        return "normal"
+    return "analysis" if _has_analysis_intent(user_text) else "normal"
+
+
+def _apply_analysis_skill(history: list[dict]) -> list[dict]:
+    if not ANALYSIS_SKILL_TEXT:
+        return list(history)
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Follow the SKILL.md analysis playbook for betting analysis turns.\n\n"
+                f"{ANALYSIS_SKILL_TEXT}"
+            ),
+        }
+    ] + list(history)
+
+
 def _build_consensus_message(analyst_response: str, strategist_response: str) -> str:
     analyst_card = _parse_pick_card(analyst_response)
     strategist_card = _parse_pick_card(strategist_response)
@@ -229,7 +305,7 @@ async def _repair_card_if_needed(agent, history, full_text: str) -> str:
     return f"{full_text.rstrip()}\n\n{repaired}"
 
 
-async def stream_agent_response(agent, history, update, prefix_emoji, prefix_name):
+async def stream_agent_response(agent, history, update, prefix_emoji, prefix_name, enforce_card: bool = True):
     """
     Stream an agent's response into a Telegram message.
     Sends an initial message, then edits it as tokens arrive.
@@ -256,7 +332,8 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
                 last_edit_time = now
         
         # Enforce a structured final card for downstream consensus parsing.
-        full_text = await _repair_card_if_needed(agent, history, full_text)
+        if enforce_card:
+            full_text = await _repair_card_if_needed(agent, history, full_text)
 
         # Final edit with complete text (no cursor)
         if msg:
@@ -280,16 +357,39 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await _safe_reply_text(
         update.message,
         "🏀 *NBA Betting Analysis Agents Online*\n\n"
-        "Ask me anything about NBA games, matchups, or betting strategy.\n"
-        "Two agents will respond:\n"
+        "Default mode is normal chat.\n"
+        "When analysis is requested, two agents will respond:\n"
         "📊 *The Analyst* — Raw data & stats\n"
         "🎯 *The Strategist* — Betting plays & risk\n\n"
         "Commands:\n"
         "/start — Show this message\n"
+        "/analysis — Force analysis mode\n"
+        "/normal — Force normal chat mode\n"
+        "/auto — Auto-detect mode from your message\n"
         "/reset — Clear conversation history\n\n"
-        "Example: _\"Who plays tonight?\"_",
+        "Examples:\n"
+        "_\"what's up\"_ (normal)\n"
+        "_\"analyze Lakers vs Suns and give a pick\"_ (analysis)",
         markdown=True,
     )
+
+
+async def analysis_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    chat_modes[chat_id] = "analysis"
+    await _safe_reply_text(update.message, "🧠 Mode set to ANALYSIS. I will use the SKILL.md workflow.")
+
+
+async def normal_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    chat_modes[chat_id] = "normal"
+    await _safe_reply_text(update.message, "💬 Mode set to NORMAL chat.")
+
+
+async def auto_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    chat_modes[chat_id] = "auto"
+    await _safe_reply_text(update.message, "🤖 Mode set to AUTO (normal chat unless analysis intent is detected).")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -305,15 +405,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     history = chat_histories[chat_id]
     history.append({"role": "user", "content": user_text})
     turn_history = list(history)
+    active_mode = _resolve_chat_mode(chat_id, user_text)
+
+    if active_mode == "normal":
+        normal_response = await stream_agent_response(
+            chat_agent, turn_history, update, "💬", "Assistant", enforce_card=False
+        )
+        history.append({"role": "assistant", "name": "Assistant", "content": normal_response})
+        if len(history) > 30:
+            chat_histories[chat_id] = history[-30:]
+        return
+
+    analysis_history = _apply_analysis_skill(turn_history)
 
     # --- Analyst Turn (Independent) ---
     analyst_response = await stream_agent_response(
-        analyst, turn_history, update, "📊", "The Sharp"
+        analyst, analysis_history, update, "📊", "The Sharp"
     )
 
     # --- Strategist Turn (Independent) ---
     strategist_response = await stream_agent_response(
-        strategist, turn_history, update, "🎯", "The Contrarian"
+        strategist, analysis_history, update, "🎯", "The Contrarian"
     )
 
     history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
@@ -329,6 +441,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_histories[chat_id] = []
+    chat_modes[chat_id] = "auto"
     await _safe_reply_text(update.message, "🔄 Conversation history cleared.")
 
 
@@ -351,6 +464,7 @@ def main():
     print(f"   Max Tokens: 128,000")
     print(f"   Streaming:  ON")
     print(f"   LLM URL:    {base_url or 'default'}")
+    print(f"   SKILL.md:   {'loaded' if ANALYSIS_SKILL_TEXT else 'not found'}")
     
     app = (
         ApplicationBuilder()
@@ -363,6 +477,9 @@ def main():
     )
     
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("analysis", analysis_mode_command))
+    app.add_handler(CommandHandler("normal", normal_mode_command))
+    app.add_handler(CommandHandler("auto", auto_mode_command))
     app.add_handler(CommandHandler("reset", reset_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)

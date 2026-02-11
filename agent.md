@@ -3,6 +3,11 @@
 ## What This Is
 A Telegram bot with **two AI agents** that debate NBA games and give betting recommendations. Each agent has a distinct personality and runs on a different LLM.
 
+Runtime behavior:
+- Default is normal chat mode.
+- Analysis mode is triggered by betting-analysis intent or forced with `/analysis`.
+- Analysis turns load workflow instructions from `SKILL.md`.
+
 ## Architecture
 ```
 User (Telegram) → main.py → Agent A → Agent B → Telegram
@@ -21,6 +26,7 @@ User (Telegram) → main.py → Agent A → Agent B → Telegram
 
 ## Key Files
 - `main.py` – Telegram bot entry point, streaming responses, per-chat history (30 msg cap)
+- `SKILL.md` – Analysis workflow playbook loaded on analysis turns
 - `agents/base_agent.py` – OpenAI client wrapper with streaming + tool call loop
 - `agents/analyst.py` – Agent A prompt + class
 - `agents/strategist.py` – Agent B prompt + class
@@ -47,12 +53,14 @@ ODDS_API_BASE_URL=    # Optional override (default: https://api.the-odds-api.com
 | `get_weekly_schedule(date, team_name)` | 7-day schedule |
 | `get_season_schedule(year, team_name)` | Full season |
 | `get_live_scores(date, team_name)` | Live box scores (auto-resolves game_id) |
+| `get_live_vs_season_context(team_name, ...)` | One-call workflow: live game state + season baselines + deltas (+ optional roster/market) |
 | `get_team_stats(year, team_name)` | Season team stats |
 | `get_player_stats(year, team_name)` | Season player stats |
 | `get_injuries(team_name)` | Current injury report |
 | `get_depth_charts(team_name)` | Roster depth |
 | `get_team_info(team_name)` | Team metadata |
 | `get_player_info(team_name)` | Player metadata |
+| `get_roster_context(team_name)` | One-call roster bundle: player info + depth chart + injuries |
 | `get_market_odds(...)` | Market prices (h2h/spreads/totals/outrights), with optional team/bookmaker/time filters |
 
 ## Known Gotchas
@@ -62,6 +70,7 @@ ODDS_API_BASE_URL=    # Optional override (default: https://api.the-odds-api.com
 - **Novita rate limit**: 30 RPM for kimi-k2.5. Comfortable for single-user bot.
 - **Streaming**: Responses stream to Telegram via periodic `editMessageText` (~0.8s intervals) with a `▌` cursor.
 - **`max_completion_tokens`**: Used instead of `max_tokens` (required by gpt-5.1). If Novita/Kimi rejects this param, switch back to `max_tokens` for that agent only.
+- **Modes**: `/analysis` forces analysis mode, `/normal` forces chat mode, `/auto` returns to intent-based switching.
 
 ## Pending Work
 1. **Persistent chat history**: Currently in-memory dict, lost on restart. Could add JSON file persistence.
