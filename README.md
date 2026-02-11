@@ -41,7 +41,7 @@ Commands:
 
 ## Analysis Workflow
 
-On analysis turns, the bot injects `/Users/klyexy/Documents/brianna1/SKILL.md` as the analysis playbook.
+On analysis turns, the bot injects `SKILL.md` as the analysis playbook.
 
 Current analysis policy includes:
 
@@ -78,7 +78,7 @@ Important: both prompts now require tool-grounded roster/market claims (not mode
 
 ## Caching Behavior
 
-In-memory TTL cache is implemented in `/Users/klyexy/Documents/brianna1/tools/nba_tools.py`.
+In-memory TTL cache is implemented in `tools/nba_tools.py`.
 
 Cached endpoints include schedules/stats/roster/odds.
 
@@ -94,20 +94,20 @@ Notes:
 
 ## Project Structure
 
-- `/Users/klyexy/Documents/brianna1/main.py` Telegram runtime, mode routing, streaming, consensus
-- `/Users/klyexy/Documents/brianna1/SKILL.md` analysis playbook used during analysis turns
-- `/Users/klyexy/Documents/brianna1/agents/base_agent.py` model client + tool-call loop
-- `/Users/klyexy/Documents/brianna1/agents/analyst.py` The Sharp prompt
-- `/Users/klyexy/Documents/brianna1/agents/strategist.py` The Contrarian prompt
-- `/Users/klyexy/Documents/brianna1/tools/nba_tools.py` tool definitions, cache, orchestration
-- `/Users/klyexy/Documents/brianna1/tools/nba_client.py` Rolling Insights client
-- `/Users/klyexy/Documents/brianna1/tools/odds_client.py` Odds API client
-- `/Users/klyexy/Documents/brianna1/config/config.yaml` model/provider config
-- `/Users/klyexy/Documents/brianna1/agent.md` internal project context notes
+- `main.py` Telegram runtime, mode routing, streaming, consensus
+- `SKILL.md` analysis playbook used during analysis turns
+- `agents/base_agent.py` model client + tool-call loop
+- `agents/analyst.py` The Sharp prompt
+- `agents/strategist.py` The Contrarian prompt
+- `tools/nba_tools.py` tool definitions, cache, orchestration
+- `tools/nba_client.py` Rolling Insights client
+- `tools/odds_client.py` Odds API client
+- `config/config.yaml` model/provider config
+- `agent.md` internal project context notes
 
 ## Environment Variables
 
-Set in `/Users/klyexy/Documents/brianna1/.env`:
+Set in `.env`:
 
 - `OPENAI_API_KEY`
 - `NOVITA_API_KEY`
@@ -120,7 +120,7 @@ Set in `/Users/klyexy/Documents/brianna1/.env`:
 ## Run
 
 ```bash
-cd /Users/klyexy/Documents/brianna1
+cd .
 python main.py
 ```
 
