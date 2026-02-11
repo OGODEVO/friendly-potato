@@ -1,181 +1,131 @@
-# 🏀 NBA Sharp — Multi-Agent Betting Analyst
+# NBA Betting Telegram Bot
 
-A Telegram bot powered by **two competing AI agents** that debate NBA matchups, pull live data, and give structured betting recommendations — each running on a different LLM.
+A Telegram bot with two specialized analysis agents and one normal-chat assistant.
 
-![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)
+## System Design
 
----
+The bot has two operating paths:
 
-## How It Works
+1. Normal chat path (single assistant)
+- Used for casual messages.
+- Shows: `Assistant is thinking...`
+- No forced betting pick output.
 
-```
-You (Telegram)
-  │
-  ▼
-📊 Agent A: "The Sharp"          ──── GPT-5.1 (OpenAI)
-│  Quant analyst. eFG%, OffRtg,
-│  DefRtg, pace. No narratives.
-│
-  ▼
-🎯 Agent B: "The Contrarian"     ──── Kimi-k2.5 (Novita AI)
-│  Market psychologist. Spots,
-│  public fades, value traps.
-│
-  ▼
-🤝 Consensus Card
-   Pick · Confidence · Reason
-```
+2. Analysis path (two agents + consensus)
+- Used when analysis intent is detected, or forced with `/analysis`.
+- Shows:
+  - `The Sharp is thinking...`
+  - `The Contrarian is thinking...`
+- Ends with a consensus block.
 
-Both agents share the same NBA data tools but approach games from opposite angles. After both respond, a **consensus card** compares their picks.
+## Mode Routing
 
----
+Per chat, mode can be:
 
-## Features
+1. `auto` (default after `/reset`)
+- Normal chat unless betting-analysis intent is detected.
 
-- **Multi-LLM debate** — Two agents on different models for genuine diversity of thought
-- **Live box scores** — Real-time game data via Rolling Insights API
-- **Market odds** — Spreads, moneylines, and totals via The Odds API
-- **Streaming responses** — Token-by-token output in Telegram with a typing cursor (`▌`)
-- **Structured picks** — Each agent ends with a `Pick / Confidence / Reason` card
-- **Consensus logic** — Automatic agreement/disagreement detection after both agents respond
-- **Per-chat history** — 30-message rolling window per Telegram chat
+2. `analysis`
+- Always runs the two-agent analysis path.
 
----
+3. `normal`
+- Always runs the single assistant path.
 
-## Quick Start
+Commands:
 
-### 1. Clone & Install
+- `/start` show help
+- `/analysis` force analysis mode
+- `/normal` force normal chat mode
+- `/auto` return to intent-based routing
+- `/reset` clear history and reset mode to `auto`
 
-```bash
-git clone https://github.com/OGODEVO/friendly-potato.git
-cd friendly-potato
-python -m venv venv && source venv/bin/activate
-pip install openai httpx python-dotenv pyyaml python-telegram-bot rich
-```
+## Analysis Workflow
 
-### 2. Configure API Keys
+On analysis turns, the bot injects `/Users/klyexy/Documents/brianna1/SKILL.md` as the analysis playbook.
 
-Create a `.env` file:
+Current analysis policy includes:
 
-```env
-OPENAI_API_KEY=sk-...        # OpenAI (Agent A)
-NOVITA_API_KEY=sk_...         # Novita AI (Agent B)
-TELEGRAM_BOT_TOKEN=...        # Telegram BotFather token
-RSC_TOKEN=...                 # Rolling Insights NBA data API
-ODDS_API_KEY=...              # The Odds API (optional, for market odds)
-```
+- Live-first workflow via `get_live_vs_season_context(...)`
+- Roster grounding via `get_roster_context(...)`
+- Market grounding via `get_market_odds(...)`
+- Structured output card:
+  - `Pick`
+  - `Confidence`
+  - `Reason`
 
-### 3. Run
+## Agent Roles
 
-```bash
-python main.py
-```
+1. The Sharp (`gpt-5.1`)
+- Quant/stat-driven analysis.
 
-Then message your bot on Telegram. Ask it anything:
+2. The Contrarian (`moonshotai/kimi-k2.5` via Novita)
+- Market/spot/value framing.
 
-> *"Warriors vs Lakers tonight"*
-> *"Who should I bet on — Celtics or Knicks?"*
-> *"Give me the 76ers live score and a prediction"*
+Important: both prompts now require tool-grounded roster/market claims (not model memory).
 
----
+## Tooling (Exposed to Agents)
 
-## Agent Personas
+- `get_daily_schedule`
+- `get_live_scores`
+- `get_live_vs_season_context`
+- `get_team_stats`
+- `get_player_info`
+- `get_player_stats`
+- `get_injuries`
+- `get_depth_chart`
+- `get_roster_context`
+- `get_market_odds`
 
-| Agent | Name | Focus | Model | Temp |
-|-------|------|-------|-------|------|
-| A | **The Sharp** | eFG%, OffRtg/DefRtg, pace, math edges | `gpt-5.1` | 0.4 |
-| B | **The Contrarian** | Market psychology, spots, public fades, value | `kimi-k2.5` | 0.6 |
+## Caching Behavior
 
-Each agent outputs a **decision card**:
+In-memory TTL cache is implemented in `/Users/klyexy/Documents/brianna1/tools/nba_tools.py`.
 
-```
-Pick: Lakers -3.5
-Confidence: 72
-Reason: +5.2 NetRtg edge, injuries favor LAL, line hasn't moved.
-```
+Cached endpoints include schedules/stats/roster/odds.
 
----
+Not cached (always fresh):
 
-## Available Tools
+- `get_live_scores`
+- `get_live_vs_season_context`
 
-| Tool | Description |
-|------|-------------|
-| `get_daily_schedule` | Today's games |
-| `get_weekly_schedule` | 7-day schedule |
-| `get_live_scores` | Live box scores (auto-resolves game ID) |
-| `get_team_stats` | Season team stats |
-| `get_player_stats` | Season player stats |
-| `get_injuries` | Current injury report |
-| `get_depth_chart` | Roster depth |
-| `get_team_details` | Team metadata |
-| `get_player_info` | Player metadata |
-| `get_market_odds` | Live spreads/ML/totals from The Odds API |
+Notes:
 
----
+- Cache is process-local and clears on bot restart.
+- Daily schedule cache is ET-aware (today cached until next ET midnight).
 
 ## Project Structure
 
-```
-├── main.py                  # Telegram bot, streaming, consensus logic
-├── config/
-│   └── config.yaml          # Per-agent model/provider config
-├── agents/
-│   ├── base_agent.py        # OpenAI client, streaming, tool-call loop
-│   ├── analyst.py           # Agent A — The Sharp
-│   └── strategist.py        # Agent B — The Contrarian
-├── tools/
-│   ├── nba_client.py        # Rolling Insights API client
-│   ├── nba_tools.py         # Agent-facing tool functions + schemas
-│   ├── odds_client.py       # The Odds API client
-│   └── team_lookup.py       # Team name → API ID (verified)
-├── agent.md                 # Project context for AI assistants
-├── .env                     # API keys (gitignored)
-└── pyproject.toml           # Project metadata
-```
+- `/Users/klyexy/Documents/brianna1/main.py` Telegram runtime, mode routing, streaming, consensus
+- `/Users/klyexy/Documents/brianna1/SKILL.md` analysis playbook used during analysis turns
+- `/Users/klyexy/Documents/brianna1/agents/base_agent.py` model client + tool-call loop
+- `/Users/klyexy/Documents/brianna1/agents/analyst.py` The Sharp prompt
+- `/Users/klyexy/Documents/brianna1/agents/strategist.py` The Contrarian prompt
+- `/Users/klyexy/Documents/brianna1/tools/nba_tools.py` tool definitions, cache, orchestration
+- `/Users/klyexy/Documents/brianna1/tools/nba_client.py` Rolling Insights client
+- `/Users/klyexy/Documents/brianna1/tools/odds_client.py` Odds API client
+- `/Users/klyexy/Documents/brianna1/config/config.yaml` model/provider config
+- `/Users/klyexy/Documents/brianna1/agent.md` internal project context notes
 
----
+## Environment Variables
 
-## Telegram Commands
+Set in `/Users/klyexy/Documents/brianna1/.env`:
 
-| Command | Description |
-|---------|-------------|
-| `/start` | Welcome message |
-| `/reset` | Clear chat history |
+- `OPENAI_API_KEY`
+- `NOVITA_API_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `RSC_TOKEN`
+- `RSC_BASE_URL` (optional)
+- `ODDS_API_KEY`
+- `ODDS_API_BASE_URL` (optional)
 
----
+## Run
 
-## Configuration
-
-Edit `config/config.yaml` to swap models or providers:
-
-```yaml
-agents:
-  agent_1:
-    model: "gpt-5.1"       # Any OpenAI model
-    provider: "openai"
-
-  agent_2:
-    model: "moonshotai/kimi-k2.5"
-    provider: "novita"
-    base_url: "https://api.novita.ai/openai"
+```bash
+cd /Users/klyexy/Documents/brianna1
+python main.py
 ```
 
-Any OpenAI-compatible API works — just set the `base_url` and corresponding key in `.env`.
+## Operational Notes
 
----
-
-## Known Gotchas
-
-| Issue | Detail |
-|-------|--------|
-| **Timezone** | Dates use US Eastern (NBA standard), not UTC |
-| **Live endpoint** | Pass `team_id` OR `game_id`, never both |
-| **Team IDs** | All 30 verified against API — don't guess |
-| **Novita rate limit** | 30 RPM for kimi-k2.5 (comfortable for single user) |
-| **`max_completion_tokens`** | Required by gpt-5.1; Novita/Kimi may need `max_tokens` instead |
-
----
-
-## License
-
-MIT
+- Time logic is ET-based for NBA date handling.
+- Live endpoint logic resolves `game_id` from schedule when `team_name` is provided.
+- If roster or odds data cannot be verified from tools, analysis should explicitly mark it unverified.
