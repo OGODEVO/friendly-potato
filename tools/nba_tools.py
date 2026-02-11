@@ -1,15 +1,21 @@
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 import json
+import logging
+import threading
+import time
 from .nba_client import NBAClient
 from .odds_client import OddsClient
 from .team_lookup import resolve_team
 
 client = NBAClient()
 odds_client = OddsClient()
+logger = logging.getLogger(__name__)
 
 # NBA schedules use US Eastern Time
 _ET = timezone(timedelta(hours=-5))
+_CACHE: Dict[str, tuple[float, str]] = {}
+_CACHE_LOCK = threading.Lock()
 
 def _get_today() -> str:
     return datetime.now(_ET).strftime("%Y-%m-%d")
@@ -23,6 +29,58 @@ def _get_current_season_year() -> str:
         return str(now.year)
     else:
         return str(now.year - 1)
+
+
+def _seconds_until_next_et_midnight() -> int:
+    now = datetime.now(_ET)
+    next_day = (now + timedelta(days=1)).date()
+    next_midnight = datetime.combine(next_day, datetime.min.time(), tzinfo=_ET)
+    return max(1, int((next_midnight - now).total_seconds()))
+
+
+def _cache_key(tool_name: str, params: Dict[str, Any]) -> str:
+    return f"{tool_name}:{json.dumps(params, sort_keys=True, default=str)}"
+
+
+def _cache_get(key: str) -> Optional[str]:
+    now = time.time()
+    with _CACHE_LOCK:
+        entry = _CACHE.get(key)
+        if not entry:
+            return None
+        expires_at, value = entry
+        if expires_at <= now:
+            _CACHE.pop(key, None)
+            return None
+        return value
+
+
+def _cache_set(key: str, value: str, ttl_seconds: int) -> None:
+    if ttl_seconds <= 0:
+        return
+    with _CACHE_LOCK:
+        _CACHE[key] = (time.time() + ttl_seconds, value)
+
+
+def _cached_json(
+    tool_name: str,
+    params: Dict[str, Any],
+    ttl_seconds: int,
+    fetcher,
+) -> str:
+    key = _cache_key(tool_name, params)
+    cached = _cache_get(key)
+    if cached is not None:
+        logger.debug("cache hit: %s", key)
+        return cached
+
+    data = fetcher()
+    payload = json.dumps(data)
+    if isinstance(data, dict) and "error" in data:
+        return payload
+
+    _cache_set(key, payload, ttl_seconds)
+    return payload
 
 
 def _to_float(value: Any) -> float:
@@ -236,8 +294,13 @@ def get_daily_schedule(date: str = None, team_name: str = None) -> str:
         if not team_id:
             return f"Error: Could not find team '{team_name}'. Please check spelling."
 
-    data = client.get_schedule(date, team_id=team_id)
-    return json.dumps(data)
+    ttl_seconds = _seconds_until_next_et_midnight() if date == _get_today() else 12 * 60 * 60
+    return _cached_json(
+        "get_daily_schedule",
+        {"date": date, "team_id": team_id},
+        ttl_seconds,
+        lambda: client.get_schedule(date, team_id=team_id),
+    )
 
 def get_weekly_schedule(date: str = None, team_name: str = None) -> str:
     """
@@ -255,8 +318,12 @@ def get_weekly_schedule(date: str = None, team_name: str = None) -> str:
         if not team_id:
             return f"Error: Could not find team '{team_name}'."
 
-    data = client.get_weekly_schedule(date, team_id=team_id)
-    return json.dumps(data)
+    return _cached_json(
+        "get_weekly_schedule",
+        {"date": date, "team_id": team_id},
+        6 * 60 * 60,
+        lambda: client.get_weekly_schedule(date, team_id=team_id),
+    )
 
 def _find_game_id_for_team(date: str, team_id: int) -> str | None:
     """
@@ -264,7 +331,13 @@ def _find_game_id_for_team(date: str, team_id: int) -> str | None:
     for a specific team on a given date. This removes the need for 
     the agent to chain get_daily_schedule -> get_live_scores.
     """
-    schedule_data = client.get_schedule(date, team_id=team_id)
+    schedule_json = _cached_json(
+        "schedule_lookup_for_live",
+        {"date": date, "team_id": team_id},
+        _seconds_until_next_et_midnight() if date == _get_today() else 12 * 60 * 60,
+        lambda: client.get_schedule(date, team_id=team_id),
+    )
+    schedule_data = json.loads(schedule_json)
     
     # Parse schedule response to find game_id
     if "error" in schedule_data:
@@ -328,8 +401,12 @@ def get_team_details(team_name: str = None) -> str:
         if not team_id:
             return f"Error: Could not resolve team '{team_name}'."
             
-    data = client.get_team_info(team_id=team_id)
-    return json.dumps(data)
+    return _cached_json(
+        "get_team_details",
+        {"team_id": team_id},
+        7 * 24 * 60 * 60,
+        lambda: client.get_team_info(team_id=team_id),
+    )
 
 def get_team_stats(team_name: str = None, year: str = None) -> str:
     """
@@ -347,8 +424,13 @@ def get_team_stats(team_name: str = None, year: str = None) -> str:
         if not team_id:
             return f"Error: Could not resolve team '{team_name}'."
             
-    data = client.get_team_stats(year, team_id=team_id)
-    return json.dumps(data)
+    ttl_seconds = 12 * 60 * 60 if year == _get_current_season_year() else 24 * 60 * 60
+    return _cached_json(
+        "get_team_stats",
+        {"year": year, "team_id": team_id},
+        ttl_seconds,
+        lambda: client.get_team_stats(year, team_id=team_id),
+    )
 
 def get_player_info(team_name: str = None) -> str:
     """
@@ -364,8 +446,12 @@ def get_player_info(team_name: str = None) -> str:
         if not team_id:
             return f"Error: Could not resolve team '{team_name}'."
             
-    data = client.get_player_info(team_id=team_id)
-    return json.dumps(data)
+    return _cached_json(
+        "get_player_info",
+        {"team_id": team_id},
+        12 * 60 * 60,
+        lambda: client.get_player_info(team_id=team_id),
+    )
 
 def get_player_stats(team_name: str = None, year: str = None) -> str:
     """
@@ -383,8 +469,13 @@ def get_player_stats(team_name: str = None, year: str = None) -> str:
         if not team_id:
             return f"Error: Could not resolve team '{team_name}'."
             
-    data = client.get_player_stats(year, team_id=team_id)
-    return json.dumps(data)
+    ttl_seconds = 12 * 60 * 60 if year == _get_current_season_year() else 24 * 60 * 60
+    return _cached_json(
+        "get_player_stats",
+        {"year": year, "team_id": team_id},
+        ttl_seconds,
+        lambda: client.get_player_stats(year, team_id=team_id),
+    )
 
 def get_injuries(team_name: str = None) -> str:
     """
@@ -399,8 +490,12 @@ def get_injuries(team_name: str = None) -> str:
         if not team_id:
             return f"Error: Could not resolve team '{team_name}'."
             
-    data = client.get_injuries(team_id=team_id)
-    return json.dumps(data)
+    return _cached_json(
+        "get_injuries",
+        {"team_id": team_id},
+        5 * 60,
+        lambda: client.get_injuries(team_id=team_id),
+    )
 
 def get_depth_chart(team_name: str) -> str:
     """
@@ -413,8 +508,12 @@ def get_depth_chart(team_name: str) -> str:
     if not team_id:
         return f"Error: Could not resolve team '{team_name}'."
             
-    data = client.get_depth_charts(team_id=team_id)
-    return json.dumps(data)
+    return _cached_json(
+        "get_depth_chart",
+        {"team_id": team_id},
+        10 * 60,
+        lambda: client.get_depth_charts(team_id=team_id),
+    )
 
 
 def _depth_chart_team_block(depth_chart_payload: Dict[str, Any], team_name: str) -> Dict[str, Any]:
@@ -462,65 +561,72 @@ def get_roster_context(team_name: str, include_raw: bool = False) -> str:
     if not team_id:
         return f"Error: Could not resolve team '{team_name}'."
 
-    player_info = client.get_player_info(team_id=team_id)
-    depth_chart = client.get_depth_charts(team_id=team_id)
-    injuries = client.get_injuries(team_id=team_id)
+    def _build_payload() -> Dict[str, Any]:
+        player_info = client.get_player_info(team_id=team_id)
+        depth_chart = client.get_depth_charts(team_id=team_id)
+        injuries = client.get_injuries(team_id=team_id)
 
-    players = player_info.get("data", {}).get("NBA", [])
-    if not isinstance(players, list):
-        players = []
-    active_players = [
-        p.get("player")
-        for p in players
-        if isinstance(p, dict) and str(p.get("status", "")).upper() != "INACT" and p.get("player")
-    ]
-    inactive_count = len(
-        [p for p in players if isinstance(p, dict) and str(p.get("status", "")).upper() == "INACT"]
-    )
+        players = player_info.get("data", {}).get("NBA", [])
+        if not isinstance(players, list):
+            players = []
+        active_players = [
+            p.get("player")
+            for p in players
+            if isinstance(p, dict) and str(p.get("status", "")).upper() != "INACT" and p.get("player")
+        ]
+        inactive_count = len(
+            [p for p in players if isinstance(p, dict) and str(p.get("status", "")).upper() == "INACT"]
+        )
 
-    team_depth = _depth_chart_team_block(depth_chart, team_name)
-    projected_starters: Dict[str, str] = {}
-    if isinstance(team_depth, dict):
-        for pos in ["PG", "SG", "SF", "PF", "C"]:
-            pos_map = team_depth.get(pos, {})
-            if isinstance(pos_map, dict) and "1" in pos_map and isinstance(pos_map["1"], dict):
-                projected_starters[pos] = pos_map["1"].get("player", "Unknown")
-    rotation_players = _rotation_players_from_depth(team_depth, max_depth=3)
+        team_depth = _depth_chart_team_block(depth_chart, team_name)
+        projected_starters: Dict[str, str] = {}
+        if isinstance(team_depth, dict):
+            for pos in ["PG", "SG", "SF", "PF", "C"]:
+                pos_map = team_depth.get(pos, {})
+                if isinstance(pos_map, dict) and "1" in pos_map and isinstance(pos_map["1"], dict):
+                    projected_starters[pos] = pos_map["1"].get("player", "Unknown")
+        rotation_players = _rotation_players_from_depth(team_depth, max_depth=3)
 
-    injuries_rows = injuries.get("data", {}).get("NBA", [])
-    injury_list = []
-    if isinstance(injuries_rows, list) and injuries_rows:
-        injury_list = injuries_rows[0].get("injuries", []) or []
-    injury_players = [i.get("player") for i in injury_list if isinstance(i, dict) and i.get("player")]
+        injuries_rows = injuries.get("data", {}).get("NBA", [])
+        injury_list = []
+        if isinstance(injuries_rows, list) and injuries_rows:
+            injury_list = injuries_rows[0].get("injuries", []) or []
+        injury_players = [i.get("player") for i in injury_list if isinstance(i, dict) and i.get("player")]
 
-    payload: Dict[str, Any] = {
-        "team_name": team_name,
-        "team_id": team_id,
-        "summary": {
-            "projected_starters": projected_starters,
-            "rotation_players_depth_1_to_3": rotation_players,
-            "active_players_from_player_info": active_players,
-            "injury_players": injury_players,
-            "counts": {
-                "player_info_rows": len(players),
-                "player_info_inactive_rows": inactive_count,
-                "injury_count": len(injury_players),
+        payload: Dict[str, Any] = {
+            "team_name": team_name,
+            "team_id": team_id,
+            "summary": {
+                "projected_starters": projected_starters,
+                "rotation_players_depth_1_to_3": rotation_players,
+                "active_players_from_player_info": active_players,
+                "injury_players": injury_players,
+                "counts": {
+                    "player_info_rows": len(players),
+                    "player_info_inactive_rows": inactive_count,
+                    "injury_count": len(injury_players),
+                },
+                "source_quality_note": (
+                    "Depth chart + injuries are prioritized for current roster calls. "
+                    "player_info may include inactive/historical rows."
+                ),
             },
-            "source_quality_note": (
-                "Depth chart + injuries are prioritized for current roster calls. "
-                "player_info may include inactive/historical rows."
-            ),
-        },
-    }
-
-    if include_raw:
-        payload["raw"] = {
-            "player_info": player_info,
-            "depth_chart": depth_chart,
-            "injuries": injuries,
         }
 
-    return json.dumps(payload)
+        if include_raw:
+            payload["raw"] = {
+                "player_info": player_info,
+                "depth_chart": depth_chart,
+                "injuries": injuries,
+            }
+        return payload
+
+    return _cached_json(
+        "get_roster_context",
+        {"team_id": team_id, "include_raw": include_raw},
+        10 * 60,
+        _build_payload,
+    )
 
 
 def get_live_vs_season_context(
@@ -674,6 +780,29 @@ def get_market_odds(
         commence_time_to (str, optional): ISO timestamp upper bound.
         include_links/include_sids/include_bet_limits/include_rotation_numbers (bool, optional): API flags.
     """
+    cache_key = _cache_key(
+        "get_market_odds",
+        {
+            "sport": sport,
+            "regions": regions,
+            "markets": markets,
+            "date_format": date_format,
+            "odds_format": odds_format,
+            "team_name": team_name.lower().strip() if isinstance(team_name, str) else team_name,
+            "event_ids": event_ids,
+            "bookmakers": bookmakers,
+            "commence_time_from": commence_time_from,
+            "commence_time_to": commence_time_to,
+            "include_links": include_links,
+            "include_sids": include_sids,
+            "include_bet_limits": include_bet_limits,
+            "include_rotation_numbers": include_rotation_numbers,
+        },
+    )
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     data = odds_client.get_odds(
         sport=sport,
         regions=regions,
@@ -708,7 +837,9 @@ def get_market_odds(
         data["meta"]["team_filter"] = team_name
         data["meta"]["events_returned"] = len(filtered)
 
-    return json.dumps(data)
+    payload = json.dumps(data)
+    _cache_set(cache_key, payload, 30)
+    return payload
 
 # Tool Definitions for OpenAI
 TOOLS_SCHEMA = [
