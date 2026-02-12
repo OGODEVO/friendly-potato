@@ -91,6 +91,14 @@ ANALYSIS_KEYWORDS = [
     "ev",
 ]
 
+AGENT_TARGET_ALIASES = {
+    "sharp": "sharp",
+    "analyst": "sharp",
+    "contrarian": "contrarian",
+    "contra": "contrarian",
+    "strategist": "contrarian",
+}
+
 
 def _load_analysis_skill_text() -> str:
     for candidate in [Path("SKILL.md"), Path("skill.md")]:
@@ -228,6 +236,21 @@ def _resolve_chat_mode(chat_id: int, user_text: str) -> str:
     if mode == "normal":
         return "normal"
     return "analysis" if _has_analysis_intent(user_text) else "normal"
+
+
+def _extract_agent_target(user_text: str) -> tuple[Optional[str], str]:
+    found_targets: set[str] = set()
+    cleaned = user_text
+
+    for alias, target in AGENT_TARGET_ALIASES.items():
+        pattern = rf"(?i)(?<!\w)@{re.escape(alias)}\b"
+        if re.search(pattern, user_text):
+            found_targets.add(target)
+            cleaned = re.sub(pattern, " ", cleaned)
+
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    target = next(iter(found_targets)) if len(found_targets) == 1 else None
+    return target, cleaned
 
 
 def _apply_analysis_skill(history: list[dict]) -> list[dict]:
@@ -369,7 +392,9 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/reset — Clear conversation history\n\n"
         "Examples:\n"
         "_\"what's up\"_ (normal)\n"
-        "_\"analyze Lakers vs Suns and give a pick\"_ (analysis)",
+        "_\"analyze Lakers vs Suns and give a pick\"_ (analysis)\n"
+        "_\"@sharp Lakers OKC live total?\"_ (single-agent analysis)\n"
+        "_\"@contra same game, contrarian view\"_ (single-agent analysis)",
         markdown=True,
     )
 
@@ -398,14 +423,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_text:
         return
 
+    target_agent, cleaned_text = _extract_agent_target(user_text)
+    effective_user_text = cleaned_text if cleaned_text else user_text
+
     # Get or create history for this chat
     if chat_id not in chat_histories:
         chat_histories[chat_id] = []
     
     history = chat_histories[chat_id]
-    history.append({"role": "user", "content": user_text})
+    history.append({"role": "user", "content": effective_user_text})
     turn_history = list(history)
-    active_mode = _resolve_chat_mode(chat_id, user_text)
+    active_mode = "analysis" if target_agent else _resolve_chat_mode(chat_id, effective_user_text)
 
     if active_mode == "normal":
         normal_response = await stream_agent_response(
@@ -418,21 +446,32 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     analysis_history = _apply_analysis_skill(turn_history)
 
-    # --- Analyst Turn (Independent) ---
-    analyst_response = await stream_agent_response(
-        analyst, analysis_history, update, "📊", "The Sharp"
-    )
+    if target_agent == "sharp":
+        analyst_response = await stream_agent_response(
+            analyst, analysis_history, update, "📊", "The Sharp"
+        )
+        history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
+    elif target_agent == "contrarian":
+        strategist_response = await stream_agent_response(
+            strategist, analysis_history, update, "🎯", "The Contrarian"
+        )
+        history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
+    else:
+        # --- Analyst Turn (Independent) ---
+        analyst_response = await stream_agent_response(
+            analyst, analysis_history, update, "📊", "The Sharp"
+        )
 
-    # --- Strategist Turn (Independent) ---
-    strategist_response = await stream_agent_response(
-        strategist, analysis_history, update, "🎯", "The Contrarian"
-    )
+        # --- Strategist Turn (Independent) ---
+        strategist_response = await stream_agent_response(
+            strategist, analysis_history, update, "🎯", "The Contrarian"
+        )
 
-    history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
-    history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
+        history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
+        history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
 
-    consensus = _build_consensus_message(analyst_response, strategist_response)
-    await _safe_reply_text(update.message, consensus)
+        consensus = _build_consensus_message(analyst_response, strategist_response)
+        await _safe_reply_text(update.message, consensus)
 
     # Keep history manageable (last 30 messages)
     if len(history) > 30:
