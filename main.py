@@ -5,6 +5,8 @@ import time
 import asyncio
 import logging
 import re
+import shutil
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -65,6 +67,12 @@ chat_agent = BaseAgent(
 # Per-chat conversation histories
 chat_histories: dict[int, list] = {}
 chat_modes: dict[int, str] = {}
+chat_session_files: dict[int, Path] = {}
+
+# Persistent transcript logging
+BASE_DIR = Path(__file__).resolve().parent
+LOG_DIR = BASE_DIR / "logs" / "chat_transcripts"
+SNAPSHOT_DIR = BASE_DIR / "logs" / "saved_transcripts"
 
 # Streaming config
 STREAM_EDIT_INTERVAL = 0.8  # seconds between Telegram message edits
@@ -111,6 +119,64 @@ def _load_analysis_skill_text() -> str:
 
 
 ANALYSIS_SKILL_TEXT = _load_analysis_skill_text()
+
+
+def _now_iso_utc() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _ensure_log_dirs() -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _start_chat_session(chat_id: int, reason: str = "new") -> Path:
+    _ensure_log_dirs()
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    path = LOG_DIR / f"chat_{chat_id}_{stamp}.md"
+    header = (
+        f"# Chat Transcript\n"
+        f"- chat_id: {chat_id}\n"
+        f"- started_at_utc: {_now_iso_utc()}\n"
+        f"- reason: {reason}\n"
+    )
+    path.write_text(header, encoding="utf-8")
+    chat_session_files[chat_id] = path
+    return path
+
+
+def _get_chat_session_path(chat_id: int) -> Path:
+    path = chat_session_files.get(chat_id)
+    if path and path.exists():
+        return path
+    return _start_chat_session(chat_id, reason="auto")
+
+
+def _append_transcript(chat_id: int, speaker: str, content: str, meta: Optional[str] = None) -> None:
+    try:
+        path = _get_chat_session_path(chat_id)
+        clean = (content or "").strip() or "(empty)"
+        meta_clean = re.sub(r"\s+", " ", meta).strip() if meta else ""
+        meta_suffix = f" [{meta_clean}]" if meta_clean else ""
+        with path.open("a", encoding="utf-8") as f:
+            f.write(f"\n\n### {_now_iso_utc()} | {speaker}{meta_suffix}\n")
+            f.write(clean)
+            f.write("\n")
+    except Exception as exc:
+        logger.warning("Transcript append failed for chat %s: %s", chat_id, exc)
+
+
+def _save_transcript_snapshot(chat_id: int) -> Optional[Path]:
+    try:
+        _ensure_log_dirs()
+        source = _get_chat_session_path(chat_id)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        destination = SNAPSHOT_DIR / f"{source.stem}_saved_{stamp}.md"
+        shutil.copy2(source, destination)
+        return destination
+    except Exception as exc:
+        logger.warning("Transcript snapshot failed for chat %s: %s", chat_id, exc)
+        return None
 
 
 async def _wait_before_retry(exc: Exception, attempt: int) -> None:
@@ -377,6 +443,8 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    _append_transcript(chat_id, "System", "/start command received")
     await _safe_reply_text(
         update.message,
         "🏀 *NBA Betting Analysis Agents Online*\n\n"
@@ -389,6 +457,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/analysis — Force analysis mode\n"
         "/normal — Force normal chat mode\n"
         "/auto — Auto-detect mode from your message\n"
+        "/save — Save current transcript snapshot\n"
         "/reset — Clear conversation history\n\n"
         "Examples:\n"
         "_\"what's up\"_ (normal)\n"
@@ -402,19 +471,35 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def analysis_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_modes[chat_id] = "analysis"
+    _append_transcript(chat_id, "System", "Mode set to analysis via /analysis")
     await _safe_reply_text(update.message, "🧠 Mode set to ANALYSIS. I will use the SKILL.md workflow.")
 
 
 async def normal_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_modes[chat_id] = "normal"
+    _append_transcript(chat_id, "System", "Mode set to normal via /normal")
     await _safe_reply_text(update.message, "💬 Mode set to NORMAL chat.")
 
 
 async def auto_mode_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_modes[chat_id] = "auto"
+    _append_transcript(chat_id, "System", "Mode set to auto via /auto")
     await _safe_reply_text(update.message, "🤖 Mode set to AUTO (normal chat unless analysis intent is detected).")
+
+
+async def save_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    _append_transcript(chat_id, "System", "/save command received")
+    snapshot_path = _save_transcript_snapshot(chat_id)
+    if snapshot_path is None:
+        await _safe_reply_text(update.message, "⚠️ Failed to save transcript snapshot.")
+        return
+    await _safe_reply_text(
+        update.message,
+        f"💾 Transcript snapshot saved:\n{snapshot_path.resolve()}",
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -432,6 +517,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     history = chat_histories[chat_id]
     history.append({"role": "user", "content": effective_user_text})
+    _append_transcript(chat_id, "User", effective_user_text, meta=f"raw={user_text}")
     turn_history = list(history)
     active_mode = "analysis" if target_agent else _resolve_chat_mode(chat_id, effective_user_text)
 
@@ -440,6 +526,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_agent, turn_history, update, "💬", "Assistant", enforce_card=False
         )
         history.append({"role": "assistant", "name": "Assistant", "content": normal_response})
+        _append_transcript(chat_id, "Assistant", normal_response, meta=f"mode={active_mode}")
         if len(history) > 30:
             chat_histories[chat_id] = history[-30:]
         return
@@ -451,11 +538,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             analyst, analysis_history, update, "📊", "The Sharp"
         )
         history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
+        _append_transcript(chat_id, "The Sharp", analyst_response, meta="mode=analysis,target=sharp")
     elif target_agent == "contrarian":
         strategist_response = await stream_agent_response(
             strategist, analysis_history, update, "🎯", "The Contrarian"
         )
         history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
+        _append_transcript(chat_id, "The Contrarian", strategist_response, meta="mode=analysis,target=contrarian")
     else:
         # --- Analyst Turn (Independent) ---
         analyst_response = await stream_agent_response(
@@ -469,9 +558,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
         history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
+        _append_transcript(chat_id, "The Sharp", analyst_response, meta="mode=analysis,target=both")
+        _append_transcript(chat_id, "The Contrarian", strategist_response, meta="mode=analysis,target=both")
 
         consensus = _build_consensus_message(analyst_response, strategist_response)
         await _safe_reply_text(update.message, consensus)
+        _append_transcript(chat_id, "Consensus", consensus, meta="mode=analysis")
 
     # Keep history manageable (last 30 messages)
     if len(history) > 30:
@@ -479,9 +571,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
+    _append_transcript(chat_id, "System", "Conversation reset via /reset")
     chat_histories[chat_id] = []
     chat_modes[chat_id] = "auto"
+    new_session_path = _start_chat_session(chat_id, reason="reset")
     await _safe_reply_text(update.message, "🔄 Conversation history cleared.")
+    await _safe_reply_text(
+        update.message,
+        f"🧾 New transcript session started:\n{new_session_path.resolve()}",
+    )
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -504,6 +602,8 @@ def main():
     print(f"   Streaming:  ON")
     print(f"   LLM URL:    {base_url or 'default'}")
     print(f"   SKILL.md:   {'loaded' if ANALYSIS_SKILL_TEXT else 'not found'}")
+    _ensure_log_dirs()
+    print(f"   Logs Dir:   {LOG_DIR.resolve()}")
     
     app = (
         ApplicationBuilder()
@@ -519,6 +619,7 @@ def main():
     app.add_handler(CommandHandler("analysis", analysis_mode_command))
     app.add_handler(CommandHandler("normal", normal_mode_command))
     app.add_handler(CommandHandler("auto", auto_mode_command))
+    app.add_handler(CommandHandler("save", save_command))
     app.add_handler(CommandHandler("reset", reset_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_error_handler(error_handler)
