@@ -442,6 +442,38 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
     return full_text
 
 
+async def run_agent_response_fast(agent, history, update, prefix_emoji, prefix_name, enforce_card: bool = True):
+    """
+    Faster non-streaming agent response path.
+    Useful for analysis mode where two agents can run concurrently.
+    """
+    msg = await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name} is thinking...*", markdown=True)
+
+    full_text = ""
+    try:
+        full_text = await asyncio.to_thread(agent.chat, history)
+        full_text = (full_text or "").strip()
+
+        if enforce_card:
+            full_text = await _repair_card_if_needed(agent, history, full_text)
+
+        if msg:
+            await _safe_edit_text(msg, f"{prefix_emoji} *{prefix_name}:*\n{full_text}", markdown=True)
+        else:
+            await _safe_reply_text(update.message, f"{prefix_emoji} {prefix_name}:\n{full_text}")
+
+    except Exception as e:
+        full_text = f"(Error: {e})"
+        logger.error("%s fast-response error: %s", prefix_name, e)
+        error_text = f"{prefix_emoji} {prefix_name}:\n⚠️ Error: {str(e)[:200]}"
+        if msg:
+            await _safe_edit_text(msg, error_text)
+        else:
+            await _safe_reply_text(update.message, error_text)
+
+    return full_text
+
+
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     _append_transcript(chat_id, "System", "/start command received")
@@ -534,27 +566,25 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     analysis_history = _apply_analysis_skill(turn_history)
 
     if target_agent == "sharp":
-        analyst_response = await stream_agent_response(
+        analyst_response = await run_agent_response_fast(
             analyst, analysis_history, update, "📊", "The Sharp"
         )
         history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
         _append_transcript(chat_id, "The Sharp", analyst_response, meta="mode=analysis,target=sharp")
     elif target_agent == "contrarian":
-        strategist_response = await stream_agent_response(
+        strategist_response = await run_agent_response_fast(
             strategist, analysis_history, update, "🎯", "The Contrarian"
         )
         history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
         _append_transcript(chat_id, "The Contrarian", strategist_response, meta="mode=analysis,target=contrarian")
     else:
-        # --- Analyst Turn (Independent) ---
-        analyst_response = await stream_agent_response(
-            analyst, analysis_history, update, "📊", "The Sharp"
+        analyst_task = asyncio.create_task(
+            run_agent_response_fast(analyst, analysis_history, update, "📊", "The Sharp")
         )
-
-        # --- Strategist Turn (Independent) ---
-        strategist_response = await stream_agent_response(
-            strategist, analysis_history, update, "🎯", "The Contrarian"
+        strategist_task = asyncio.create_task(
+            run_agent_response_fast(strategist, analysis_history, update, "🎯", "The Contrarian")
         )
+        analyst_response, strategist_response = await asyncio.gather(analyst_task, strategist_task)
 
         history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
         history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})

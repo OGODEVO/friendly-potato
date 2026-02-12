@@ -11,12 +11,14 @@ The bot has two operating paths:
 - Shows: `Assistant is thinking...`
 - No forced betting pick output.
 
-2. Analysis path (two agents + consensus)
-- Used when analysis intent is detected, or forced with `/analysis`.
+2. Analysis path (targeted or two-agent)
+- Used when analysis intent is detected, forced with `/analysis`, or when an agent mention is used.
 - Shows:
-  - `The Sharp is thinking...`
+  - `The Sharp is thinking...` and/or
   - `The Contrarian is thinking...`
-- Ends with a consensus block.
+- If both agents run, it ends with a consensus block.
+- If only one agent is targeted, no consensus block is produced.
+- When both agents run, they execute concurrently to reduce turnaround time.
 
 ## Mode Routing
 
@@ -26,7 +28,8 @@ Per chat, mode can be:
 - Normal chat unless betting-analysis intent is detected.
 
 2. `analysis`
-- Always runs the two-agent analysis path.
+- Runs analysis path by default with both agents.
+- Can be targeted to one agent per message using mentions.
 
 3. `normal`
 - Always runs the single assistant path.
@@ -37,7 +40,13 @@ Commands:
 - `/analysis` force analysis mode
 - `/normal` force normal chat mode
 - `/auto` return to intent-based routing
+- `/save` save a manual snapshot of current transcript log
 - `/reset` clear history and reset mode to `auto`
+
+Agent mentions (work in any mode):
+
+- `@sharp` (aliases: `@analyst`) -> run only The Sharp for that message
+- `@contra` (aliases: `@contrarian`, `@strategist`) -> run only The Contrarian for that message
 
 ## Analysis Workflow
 
@@ -52,6 +61,13 @@ Current analysis policy includes:
   - `Pick`
   - `Confidence`
   - `Reason`
+
+When both agents run:
+
+- Consensus compares parsed cards from both responses.
+- Matching normalized picks -> `AGREE`.
+- Different picks -> `NO AGREEMENT`.
+- Missing structured card fields -> `insufficient structured card data`.
 
 ## Agent Roles
 
@@ -92,9 +108,20 @@ Notes:
 - Cache is process-local and clears on bot restart.
 - Daily schedule cache is ET-aware (today cached until next ET midnight).
 
+## Transcript Logging
+
+Persistent transcript logging is built into `main.py`.
+
+- Current session logs: `logs/chat_transcripts/`
+- Manual snapshots (`/save`): `logs/saved_transcripts/`
+- Paths are always relative to the directory containing `main.py`.
+- `/reset` starts a new transcript session file (older files are preserved).
+
 ## Project Structure
 
 - `main.py` Telegram runtime, mode routing, streaming, consensus
+- `logs/chat_transcripts/` rolling per-chat transcript sessions
+- `logs/saved_transcripts/` manual snapshot copies
 - `SKILL.md` analysis playbook used during analysis turns
 - `agents/base_agent.py` model client + tool-call loop
 - `agents/analyst.py` The Sharp prompt
