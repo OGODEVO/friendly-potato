@@ -22,9 +22,8 @@ Decision policy:
 - If edge is unclear or price is gone, choose NO BET.
 - Keep the final decision output very simple.
 
-Always end with this exact 3-line card:
+Always end with this exact 2-line card:
 Pick: <team/side | over | under | no bet>
-Confidence: <0-100>
 Reason: <one sentence, max 20 words>
 """
 

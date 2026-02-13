@@ -13,7 +13,7 @@ Use this playbook only for analysis requests (picks, lines, odds, live betting, 
 2. For live analysis, call `get_live_vs_season_context(team_name, include_roster=true, include_market=true)` first.
 3. For roster-sensitive claims, verify with `get_roster_context(team_name)` and use `summary.projected_starters`, `summary.rotation_players_depth_1_to_3`, and `summary.injury_players`.
 4. For market/value claims, verify with `get_market_odds(...)` or user-provided odds.
-5. If required data is missing, explicitly mark it unverified and lower confidence.
+5. If required data is missing, explicitly mark it unverified and downgrade the edge.
 
 ## Decision Rules
 1. Do not force a bet when edge is unclear.
@@ -26,5 +26,4 @@ Use this playbook only for analysis requests (picks, lines, odds, live betting, 
 End with exactly:
 
 Pick: <team/side | over | under | no bet>
-Confidence: <0-100>
 Reason: <one sentence, max 20 words>

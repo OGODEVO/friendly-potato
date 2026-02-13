@@ -262,7 +262,7 @@ def _parse_pick_card(text: str) -> dict[str, Optional[str]]:
 
 def _is_structured_card_complete(text: str) -> bool:
     card = _parse_pick_card(text)
-    return bool(card["pick"] and card["confidence"] and card["reason"])
+    return bool(card["pick"] and card["reason"])
 
 
 def _normalize(value: Optional[str]) -> str:
@@ -352,15 +352,14 @@ def _build_consensus_message(analyst_response: str, strategist_response: str) ->
         return (
             "🤝 Consensus: AGREE\n"
             f"Pick: {analyst_card['pick']}\n"
-            f"Confidence: Sharp {analyst_card['confidence'] or 'N/A'} | Contrarian {strategist_card['confidence'] or 'N/A'}\n"
             f"Reason: {analyst_card['reason'] or strategist_card['reason'] or 'Aligned edge.'}\n"
             "Decision: aligned edge."
         )
 
     return (
         "⚖️ Consensus: NO AGREEMENT\n"
-        f"The Sharp -> Pick: {analyst_card['pick'] or 'N/A'} | Confidence: {analyst_card['confidence'] or 'N/A'} | Reason: {analyst_card['reason'] or 'N/A'}\n"
-        f"The Contrarian -> Pick: {strategist_card['pick'] or 'N/A'} | Confidence: {strategist_card['confidence'] or 'N/A'} | Reason: {strategist_card['reason'] or 'N/A'}\n"
+        f"The Sharp -> Pick: {analyst_card['pick'] or 'N/A'} | Reason: {analyst_card['reason'] or 'N/A'}\n"
+        f"The Contrarian -> Pick: {strategist_card['pick'] or 'N/A'} | Reason: {strategist_card['reason'] or 'N/A'}\n"
         "Decision: no forced bet."
     )
 
@@ -370,10 +369,9 @@ async def _repair_card_if_needed(agent, history, full_text: str) -> str:
         return full_text
 
     repair_prompt = (
-        "Return ONLY this exact 3-line decision card based on your previous analysis. "
+        "Return ONLY this exact 2-line decision card based on your previous analysis. "
         "No extra text.\n"
         "Pick: <team/side | over | under | no bet>\n"
-        "Confidence: <0-100>\n"
         "Reason: <one sentence, max 20 words>"
     )
     repair_history = list(history) + [

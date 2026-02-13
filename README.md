@@ -59,7 +59,6 @@ Current analysis policy includes:
 - Market grounding via `get_market_odds(...)`
 - Structured output card:
   - `Pick`
-  - `Confidence`
   - `Reason`
 
 When both agents run:
