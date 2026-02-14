@@ -1,57 +1,84 @@
 
 import os
+import re
 import httpx
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
-import logging
+
+from .log_context import slog, Timer
 
 load_dotenv()
 
 BASE_URL = os.getenv("RSC_BASE_URL", "https://rest.datafeeds.rolling-insights.com/api/v1")
 RSC_TOKEN = os.getenv("RSC_TOKEN")
 
-logger = logging.getLogger(__name__)
+# Regex to strip any token/key that leaks into a URL string
+_SENSITIVE_QS = re.compile(r"(RSC_token|api_?key|token|secret)=[^&]+", re.IGNORECASE)
+
+
+def _sanitize_url(url: str) -> str:
+    """Replace sensitive query-string values with <REDACTED>."""
+    return _SENSITIVE_QS.sub(r"\1=<REDACTED>", str(url))
+
 
 class NBAClient:
     def __init__(self):
         if not RSC_TOKEN:
-            logger.warning("RSC_TOKEN not found in environment variables. API calls will fail.")
-        
-        self.headers = {
-            "Accept": "application/json"
+            slog.warning("nba_client.init", detail="RSC_TOKEN not found — API calls will fail")
+
+        self.headers: Dict[str, str] = {
+            "Accept": "application/json",
         }
-    
+
     def _make_request(self, endpoint: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Internal method to make HTTP GET requests to the NBA API.
+        HTTP GET to the Rolling Insights NBA API.
+        Token is sent as a query param (required by this API).
+        All logged URLs are sanitized to strip the token value.
         """
         if params is None:
             params = {}
-            
-        # Add required RSC_token
-        params['RSC_token'] = RSC_TOKEN
-        
+
+        # Rolling Insights requires the token as a query parameter.
+        params["RSC_token"] = RSC_TOKEN
+
         url = f"{BASE_URL}/{endpoint}"
-        
+
+        timer = Timer()
+        status_code: Optional[int] = None
         try:
-            response = httpx.get(url, params=params, headers=self.headers, timeout=10.0)
-            
-            # Log the full URL for debugging (masking token in real logs ideally)
-            # logger.info(f"Requesting: {response.url}")
-            
+            with timer:
+                response = httpx.get(url, params=params, headers=self.headers, timeout=10.0)
+                status_code = response.status_code
+
+            slog.info(
+                "nba_api.request",
+                endpoint=endpoint,
+                status=status_code,
+                latency_ms=timer.elapsed_ms,
+                url=_sanitize_url(str(response.url)),
+            )
+
             if response.status_code == 200:
                 try:
                     return response.json()
-                except Exception as e:
-                    return {"error": "Failed to parse JSON response", "raw": response.text}
+                except Exception:
+                    return {"error": "Failed to parse JSON response", "raw": response.text[:500]}
             elif response.status_code == 304:
                 return {"status": "No data updates (304)"}
             elif response.status_code == 404:
-                return {"error": "Resource not found (404)", "message": response.text}
+                return {"error": "Resource not found (404)", "message": response.text[:300]}
             else:
-                return {"error": f"API Error {response.status_code}", "message": response.text}
-                
+                return {"error": f"API Error {response.status_code}", "message": response.text[:300]}
+
         except httpx.RequestError as e:
+            timer.stop()
+            slog.error(
+                "nba_api.request_error",
+                endpoint=endpoint,
+                latency_ms=timer.elapsed_ms,
+                error=str(e),
+            )
             return {"error": f"Request failed: {str(e)}"}
 
     def get_schedule(self, date_str: str, sport: str = "NBA", team_id: Optional[int] = None, game_id: Optional[str] = None) -> Dict[str, Any]:
@@ -104,7 +131,7 @@ class NBAClient:
         params = {}
         if team_id: params['team_id'] = team_id
         return self._make_request(f"injuries/{sport}", params)
-        
+
     def get_depth_charts(self, sport: str = "NBA", team_id: Optional[int] = None) -> Dict[str, Any]:
         """Depth Charts"""
         params = {}

@@ -7,6 +7,7 @@ import time
 from .nba_client import NBAClient
 from .odds_client import OddsClient
 from .team_lookup import resolve_team
+from .log_context import slog
 
 client = NBAClient()
 odds_client = OddsClient()
@@ -71,12 +72,14 @@ def _cached_json(
     key = _cache_key(tool_name, params)
     cached = _cache_get(key)
     if cached is not None:
-        logger.debug("cache hit: %s", key)
+        slog.debug("cache.hit", tool=tool_name, cache_key=key)
         return cached
 
+    slog.debug("cache.miss", tool=tool_name, cache_key=key)
     data = fetcher()
     payload = json.dumps(data)
     if isinstance(data, dict) and "error" in data:
+        slog.warning("tool.fetch_error", tool=tool_name, error=data.get("error"))
         return payload
 
     _cache_set(key, payload, ttl_seconds)

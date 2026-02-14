@@ -18,6 +18,7 @@ import yaml
 from agents.analyst import AnalystAgent
 from agents.strategist import StrategistAgent
 from agents.base_agent import BaseAgent
+from tools.log_context import slog, set_context, clear_context, new_request_id, Timer
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -384,7 +385,7 @@ async def _repair_card_if_needed(agent, history, full_text: str) -> str:
     try:
         repaired = await asyncio.to_thread(agent.chat, repair_history)
     except Exception as exc:
-        logger.warning("%s card repair failed: %s", getattr(agent, "name", "agent"), exc)
+        slog.warning("agent.card_repair.failed", agent=getattr(agent, "name", "agent"), error=str(exc))
         return full_text
 
     repaired = (repaired or "").strip()
@@ -432,7 +433,7 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
 
     except Exception as e:
         full_text = f"(Error: {e})"
-        logger.error(f"{prefix_name} error: {e}")
+        slog.error("agent.stream.error", agent=prefix_name, error=str(e))
         error_text = f"{prefix_emoji} {prefix_name}:\n⚠️ Error: {str(e)[:200]}"
         if msg:
             await _safe_edit_text(msg, error_text)
@@ -464,7 +465,7 @@ async def run_agent_response_fast(agent, history, update, prefix_emoji, prefix_n
 
     except Exception as e:
         full_text = f"(Error: {e})"
-        logger.error("%s fast-response error: %s", prefix_name, e)
+        slog.error("agent.fast_response.error", agent=prefix_name, error=str(e))
         error_text = f"{prefix_emoji} {prefix_name}:\n⚠️ Error: {str(e)[:200]}"
         if msg:
             await _safe_edit_text(msg, error_text)
@@ -540,6 +541,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user_text:
         return
 
+    # --- Observability: set per-request context ---
+    request_id = new_request_id()
+    set_context(chat_id=chat_id, request_id=request_id)
+    turn_timer = Timer()
+
     target_agent, cleaned_text = _extract_agent_target(user_text)
     effective_user_text = cleaned_text if cleaned_text else user_text
 
@@ -553,12 +559,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     turn_history = list(history)
     active_mode = "analysis" if target_agent else _resolve_chat_mode(chat_id, effective_user_text)
 
+    slog.info(
+        "turn.start",
+        mode=active_mode,
+        target_agent=target_agent,
+        user_text_len=len(effective_user_text),
+        history_len=len(history),
+    )
+
     if active_mode == "normal":
         normal_response = await stream_agent_response(
             chat_agent, turn_history, update, "💬", "Assistant", enforce_card=False
         )
         history.append({"role": "assistant", "name": "Assistant", "content": normal_response})
         _append_transcript(chat_id, "Assistant", normal_response, meta=f"mode={active_mode}")
+
+        turn_timer.stop()
+        slog.info(
+            "turn.complete",
+            mode=active_mode,
+            latency_ms=turn_timer.elapsed_ms,
+            response_len=len(normal_response),
+        )
+        clear_context()
+
         if len(history) > 30:
             chat_histories[chat_id] = history[-30:]
         return
@@ -595,6 +619,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _safe_reply_text(update.message, consensus)
         _append_transcript(chat_id, "Consensus", consensus, meta="mode=analysis")
 
+    turn_timer.stop()
+    slog.info(
+        "turn.complete",
+        mode=active_mode,
+        target_agent=target_agent,
+        latency_ms=turn_timer.elapsed_ms,
+    )
+    clear_context()
+
     # Keep history manageable (last 30 messages)
     if len(history) > 30:
         chat_histories[chat_id] = history[-30:]
@@ -613,7 +646,8 @@ async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.exception("Unhandled exception while processing update", exc_info=context.error)
+    slog.exception("telegram.unhandled_error", error=str(context.error))
+    clear_context()
 
 def main():
     token = os.getenv("TELEGRAM_BOT_TOKEN")
