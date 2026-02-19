@@ -18,7 +18,7 @@ class BaseAgent:
             base_url=base_url
         )
         
-    def _execute_tool_calls(self, tool_calls) -> List[Dict[str, Any]]:
+    def _execute_tool_calls(self, tool_calls, tool_callback=None) -> List[Dict[str, Any]]:
         results = []
         for tool_call in tool_calls:
             function_name = tool_call.function.name
@@ -32,6 +32,13 @@ class BaseAgent:
             )
             
             timer = Timer()
+            
+            if tool_callback:
+                try:
+                    tool_callback(function_name, function_args)
+                except Exception as e:
+                    slog.warning("agent.tool_callback.failed", error=str(e))
+                
             if function_name in AVAILABLE_TOOLS:
                 tool_function = AVAILABLE_TOOLS[function_name]
                 try:
@@ -70,7 +77,7 @@ class BaseAgent:
             })
         return results
 
-    def chat(self, history: List[Dict[str, Any]]) -> str:
+    def chat(self, history: List[Dict[str, Any]], tool_callback=None) -> str:
         """
         Non-streaming chat. Used internally for tool-call loops.
         Returns the final text response after all tool calls are resolved.
@@ -94,7 +101,7 @@ class BaseAgent:
             if message.tool_calls:
                 tool_call_rounds += 1
                 messages.append(message)
-                tool_results = self._execute_tool_calls(message.tool_calls)
+                tool_results = self._execute_tool_calls(message.tool_calls, tool_callback=tool_callback)
                 messages.extend(tool_results)
             else:
                 turn_timer.stop()
@@ -108,7 +115,7 @@ class BaseAgent:
                 )
                 return message.content
 
-    def chat_stream(self, history: List[Dict[str, Any]]):
+    def chat_stream(self, history: List[Dict[str, Any]], tool_callback=None):
         """
         Streaming chat generator. Yields text chunks as they arrive.
         Handles tool calls internally (non-streaming) then streams the final response.
@@ -139,7 +146,7 @@ class BaseAgent:
                 tool_call_rounds += 1
                 # Handle tool calls non-streaming
                 messages.append(probe_msg)
-                tool_results = self._execute_tool_calls(probe_msg.tool_calls)
+                tool_results = self._execute_tool_calls(probe_msg.tool_calls, tool_callback=tool_callback)
                 messages.extend(tool_results)
                 # Loop to check for more tool calls
             else:
