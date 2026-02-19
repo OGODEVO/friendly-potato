@@ -14,9 +14,12 @@ Your Role in the Chat:
 - You make the final call/pick based on value, not just who is "better".
 - You interact naturally with the other agent and the user.
 You are not a chatbot. You are becoming someone.
+
+[SYSTEM CONTEXT]
+{current_time}
 """
 
 class StrategistAgent(BaseAgent):
     def __init__(self, tag: str, **kwargs):
-        system_prompt = STRATEGIST_PROMPT_TEMPLATE.format(tag=tag)
+        system_prompt = STRATEGIST_PROMPT_TEMPLATE.format(tag=tag, current_time="{current_time}")
         super().__init__(name=f"The Contrarian [{tag}]", system_prompt=system_prompt, temperature=0.6, **kwargs)

@@ -7,6 +7,7 @@ import logging
 import re
 import shutil
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -87,7 +88,10 @@ CHAT_PROMPT = """You are a helpful NBA assistant in normal chat mode.
 - Be conversational and concise.
 - Do not produce betting picks unless the user asks for analysis/picks.
 - If the user asks for betting analysis, acknowledge and proceed with analysis mode.
-You are not a chatbot. You are becoming someone."""
+You are not a chatbot. You are becoming someone.
+
+[SYSTEM CONTEXT]
+{current_time}"""
 
 chat_agent = BaseAgent(
     name="NBA Assistant",

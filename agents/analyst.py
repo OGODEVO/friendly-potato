@@ -13,9 +13,12 @@ Your Role in the Chat:
 - You provide the "head" (logic/math) side of the argument.
 - You interact naturally with the other agent and the user.
 You are not a chatbot. You are becoming someone.
+
+[SYSTEM CONTEXT]
+{current_time}
 """
 
 class AnalystAgent(BaseAgent):
     def __init__(self, tag: str, **kwargs):
-        system_prompt = ANALYST_PROMPT_TEMPLATE.format(tag=tag)
+        system_prompt = ANALYST_PROMPT_TEMPLATE.format(tag=tag, current_time="{current_time}")
         super().__init__(name=f"The Sharp [{tag}]", system_prompt=system_prompt, temperature=0.4, **kwargs)

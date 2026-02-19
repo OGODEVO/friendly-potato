@@ -18,7 +18,6 @@ build/
 *.swo
 .DS_Store
 
-# Logs
+# Logs / Local State
 *.log
-logs/chat_transcripts/
-logs/saved_transcripts/
+logs/

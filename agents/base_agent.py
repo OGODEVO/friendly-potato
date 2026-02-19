@@ -1,10 +1,16 @@
 
 import os
 import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional, AsyncGenerator
 from openai import OpenAI
 from tools.nba_tools import TOOLS_SCHEMA, AVAILABLE_TOOLS
 from tools.log_context import slog, Timer
+
+def _get_live_context_str() -> str:
+    now_ct = datetime.now(ZoneInfo("America/Chicago"))
+    return f"Current Date/Time (US Central): {now_ct.strftime('%Y-%m-%d %I:%M %p')}\nUse this exact time to determine if a game is 'live', 'upcoming', or 'finished'."
 
 class BaseAgent:
     def __init__(self, name: str, system_prompt: str, model: str = "gpt-4o", base_url: str = None, temperature: float = 0.5, api_key: str = None, max_completion_tokens: int = 128000):
@@ -82,7 +88,8 @@ class BaseAgent:
         Non-streaming chat. Used internally for tool-call loops.
         Returns the final text response after all tool calls are resolved.
         """
-        messages = [{"role": "system", "content": self.system_prompt}] + history
+        system_content = self.system_prompt.format(current_time=_get_live_context_str())
+        messages = [{"role": "system", "content": system_content}] + history
         turn_timer = Timer()
         tool_call_rounds = 0
         
@@ -124,7 +131,8 @@ class BaseAgent:
             for chunk in agent.chat_stream(history):
                 # chunk is a string fragment
         """
-        messages = [{"role": "system", "content": self.system_prompt}] + history
+        system_content = self.system_prompt.format(current_time=_get_live_context_str())
+        messages = [{"role": "system", "content": system_content}] + history
         turn_timer = Timer()
         tool_call_rounds = 0
         
