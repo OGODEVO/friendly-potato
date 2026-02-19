@@ -10,12 +10,12 @@ agents:
   agent_1:
     name: "Analyst_01"
     role: "The Sharp"
-    model: "gpt-5.1"
+    model: "gpt-5.2"
     provider: "openai"
     
   agent_2:
     name: "Strategist_01"
     role: "The Contrarian"
-    model: "moonshotai/kimi-k2.5"
-    provider: "novita"
-    base_url: "https://api.novita.ai/openai"
+    model: "claude-sonnet-4-6"
+    provider: "anthropic"
+    max_tokens: 64000

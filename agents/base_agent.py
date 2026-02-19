@@ -7,12 +7,12 @@ from tools.nba_tools import TOOLS_SCHEMA, AVAILABLE_TOOLS
 from tools.log_context import slog, Timer
 
 class BaseAgent:
-    def __init__(self, name: str, system_prompt: str, model: str = "gpt-4o", base_url: str = None, temperature: float = 0.5, api_key: str = None):
+    def __init__(self, name: str, system_prompt: str, model: str = "gpt-4o", base_url: str = None, temperature: float = 0.5, api_key: str = None, max_completion_tokens: int = 128000):
         self.name = name
         self.system_prompt = system_prompt
         self.model = model
         self.temperature = temperature
-        self.max_completion_tokens = 128000
+        self.max_completion_tokens = max_completion_tokens
         self.client = OpenAI(
             api_key=api_key or os.getenv("OPENAI_API_KEY"),
             base_url=base_url

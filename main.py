@@ -18,7 +18,10 @@ import yaml
 from agents.analyst import AnalystAgent
 from agents.strategist import StrategistAgent
 from agents.base_agent import BaseAgent
+from agents.base_agent import BaseAgent
 from tools.log_context import slog, set_context, clear_context, new_request_id, Timer
+from tools.tag_manager import get_or_create_tags
+from tools.search_tools import get_nba_news
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +44,16 @@ analyst_kwargs = {}
 if analyst_config.get('provider') == 'openai' and base_url:
     analyst_kwargs['base_url'] = base_url
 
-analyst = AnalystAgent(model=analyst_config['model'], **analyst_kwargs)
+# Load persistent tags
+tags = get_or_create_tags(["analyst", "strategist"])
+analyst_tag = tags["analyst"]
+strategist_tag = tags["strategist"]
+
+analyst = AnalystAgent(
+    model=analyst_config['model'],
+    tag=analyst_tag,
+    **analyst_kwargs
+)
 
 # Strategist (Novita / Kimi)
 strategist_kwargs = {}
@@ -49,7 +61,14 @@ if strategist_config.get('provider') == 'novita':
     strategist_kwargs['base_url'] = strategist_config['base_url']
     strategist_kwargs['api_key'] = os.getenv("NOVITA_API_KEY")
 
-strategist = StrategistAgent(model=strategist_config['model'], **strategist_kwargs)
+if strategist_config.get('max_tokens'):
+    strategist_kwargs['max_completion_tokens'] = strategist_config['max_tokens']
+
+strategist = StrategistAgent(
+    model=strategist_config['model'],
+    tag=strategist_tag,
+    **strategist_kwargs
+)
 
 CHAT_PROMPT = """You are a helpful NBA assistant in normal chat mode.
 - Be conversational and concise.
@@ -589,22 +608,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if target_agent == "sharp":
         analyst_response = await run_agent_response_fast(
-            analyst, analysis_history, update, "📊", "The Sharp"
+            analyst, analysis_history, update, "📊", analyst.name
         )
         history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
         _append_transcript(chat_id, "The Sharp", analyst_response, meta="mode=analysis,target=sharp")
     elif target_agent == "contrarian":
         strategist_response = await run_agent_response_fast(
-            strategist, analysis_history, update, "🎯", "The Contrarian"
+            strategist, analysis_history, update, "🎯", strategist.name
         )
         history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
         _append_transcript(chat_id, "The Contrarian", strategist_response, meta="mode=analysis,target=contrarian")
     else:
         analyst_task = asyncio.create_task(
-            run_agent_response_fast(analyst, analysis_history, update, "📊", "The Sharp")
+        analyst_task = asyncio.create_task(
+            run_agent_response_fast(analyst, analysis_history, update, "📊", analyst.name)
+        )
         )
         strategist_task = asyncio.create_task(
-            run_agent_response_fast(strategist, analysis_history, update, "🎯", "The Contrarian")
+        strategist_task = asyncio.create_task(
+            run_agent_response_fast(strategist, analysis_history, update, "🎯", strategist.name)
+        )
         )
         analyst_response, strategist_response = await asyncio.gather(analyst_task, strategist_task)
 

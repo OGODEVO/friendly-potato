@@ -4,14 +4,19 @@ import json
 import logging
 import threading
 import time
+import concurrent.futures
 from .nba_client import NBAClient
 from .odds_client import OddsClient
 from .team_lookup import resolve_team
 from .log_context import slog
+from .search_tools import get_nba_news
 
 client = NBAClient()
 odds_client = OddsClient()
 logger = logging.getLogger(__name__)
+
+# Shared thread pool for parallel API calls
+_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
 # NBA schedules use US Eastern Time
 _ET = timezone(timedelta(hours=-5))
@@ -565,9 +570,15 @@ def get_roster_context(team_name: str, include_raw: bool = False) -> str:
         return f"Error: Could not resolve team '{team_name}'."
 
     def _build_payload() -> Dict[str, Any]:
-        player_info = client.get_player_info(team_id=team_id)
-        depth_chart = client.get_depth_charts(team_id=team_id)
-        injuries = client.get_injuries(team_id=team_id)
+        # Launch parallel fetches
+        future_info = _EXECUTOR.submit(client.get_player_info, team_id=team_id)
+        future_depth = _EXECUTOR.submit(client.get_depth_charts, team_id=team_id)
+        future_injuries = _EXECUTOR.submit(client.get_injuries, team_id=team_id)
+
+        # Wait for results
+        player_info = future_info.result()
+        depth_chart = future_depth.result()
+        injuries = future_injuries.result()
 
         players = player_info.get("data", {}).get("NBA", [])
         if not isinstance(players, list):
@@ -642,11 +653,11 @@ def get_live_vs_season_context(
     markets: str = "h2h,spreads,totals",
 ) -> str:
     """
-    Unified workflow tool:
+    Unified workflow tool: **THE HALFTIME WEAPON**.
     1) Finds the team's game on the requested date
     2) Pulls live/final box stats for that game
     3) Pulls season team stats for both teams
-    4) Computes live-vs-season metric deltas
+    4) Computes live-vs-season metric deltas (Perfect for fading outliers at halftime)
     5) Optionally attaches roster and market snapshots
     """
     if not date:
@@ -689,8 +700,25 @@ def get_live_vs_season_context(
     home_id = home_box.get("team_id") or game.get("home_team_ID")
     away_id = away_box.get("team_id") or game.get("away_team_ID")
 
-    home_season_raw = client.get_team_stats(year, team_id=home_id) if home_id else {}
-    away_season_raw = client.get_team_stats(year, team_id=away_id) if away_id else {}
+    # Launch parallel fetches for season stats, rosters, and market
+    future_home_stats = _EXECUTOR.submit(client.get_team_stats, year, team_id=home_id) if home_id else None
+    future_away_stats = _EXECUTOR.submit(client.get_team_stats, year, team_id=away_id) if away_id else None
+    
+    future_home_roster = None
+    if include_roster and home_name:
+        future_home_roster = _EXECUTOR.submit(_roster_summary, home_name)
+    
+    future_away_roster = None
+    if include_roster and away_name:
+        future_away_roster = _EXECUTOR.submit(_roster_summary, away_name)
+
+    future_market = None
+    if include_market and home_name and away_name:
+        future_market = _EXECUTOR.submit(_market_snapshot, home_name, away_name, regions=regions, markets=markets)
+
+    # Collect results
+    home_season_raw = future_home_stats.result() if future_home_stats else {}
+    away_season_raw = future_away_stats.result() if future_away_stats else {}
 
     home_regular = _extract_regular_season(home_season_raw) if isinstance(home_season_raw, dict) else {}
     away_regular = _extract_regular_season(away_season_raw) if isinstance(away_season_raw, dict) else {}
@@ -740,13 +768,13 @@ def get_live_vs_season_context(
     }
 
     if include_roster:
-        if home_name:
-            response.setdefault("roster", {})["home"] = _roster_summary(home_name)
-        if away_name:
-            response.setdefault("roster", {})["away"] = _roster_summary(away_name)
+        if future_home_roster:
+            response.setdefault("roster", {})["home"] = future_home_roster.result()
+        if future_away_roster:
+            response.setdefault("roster", {})["away"] = future_away_roster.result()
 
-    if include_market and home_name and away_name:
-        response["market"] = _market_snapshot(home_name, away_name, regions=regions, markets=markets)
+    if future_market:
+        response["market"] = future_market.result()
 
     return json.dumps(response)
 
@@ -1002,6 +1030,20 @@ TOOLS_SCHEMA = [
                 }
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_nba_news",
+            "description": "Search for real-time NBA news, injury reports, trade rumors, and team chemistry/vibes. Do NOT use for stats.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The search query (e.g. 'Luka Doncic injury status', 'Lakers locker room vibes')."}
+                },
+                "required": ["query"]
+            }
+        }
     }
 ]
 
@@ -1015,5 +1057,6 @@ AVAILABLE_TOOLS = {
     "get_injuries": get_injuries,
     "get_depth_chart": get_depth_chart,
     "get_roster_context": get_roster_context,
-    "get_market_odds": get_market_odds
+    "get_market_odds": get_market_odds,
+    "get_nba_news": get_nba_news
 }
