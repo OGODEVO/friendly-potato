@@ -532,6 +532,35 @@ async def _repair_card_if_needed(agent, history, full_text: str) -> str:
     return f"{full_text.rstrip()}\n\n{repaired}"
 
 
+TOOL_EMOJIS = {
+    "get_daily_schedule": "📅",
+    "get_pregame_context": "📋",
+    "get_live_scores": "⚡",
+    "get_live_vs_season_context": "🔍",
+    "get_team_stats": "📊",
+    "get_player_info": "👤",
+    "get_player_stats": "📈",
+    "get_injuries": "🚑",
+    "get_depth_chart": "🗂️",
+    "get_roster_context": "🏥",
+    "get_market_odds": "💰",
+    "get_nba_news": "📰",
+}
+
+async def _async_send_tool_status(update: Update, prefix_emoji: str, prefix_name: str, tool_name: str):
+    tool_emoji = TOOL_EMOJIS.get(tool_name, "⚙️")
+    message = f"{tool_emoji} *{prefix_name}* is checking `{tool_name}`..."
+    await _safe_reply_text(update.message, message, markdown=True)
+
+def _make_tool_callback(update: Update, prefix_emoji: str, prefix_name: str, event_loop: asyncio.AbstractEventLoop):
+    def callback(tool_name: str, args: dict):
+        asyncio.run_coroutine_threadsafe(
+            _async_send_tool_status(update, prefix_emoji, prefix_name, tool_name),
+            event_loop
+        )
+    return callback
+
+
 async def stream_agent_response(agent, history, update, prefix_emoji, prefix_name, enforce_card: bool = True):
     """
     Stream an agent's response into a Telegram message.
@@ -541,11 +570,14 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
     # Send initial "thinking" message
     msg = await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name} is thinking...*", markdown=True)
 
+    event_loop = asyncio.get_running_loop()
+    tool_callback = _make_tool_callback(update, prefix_emoji, prefix_name, event_loop)
+
     full_text = ""
     buffer = ""
     last_edit_time = time.time()
     try:
-        for chunk in agent.chat_stream(history):
+        for chunk in agent.chat_stream(history, tool_callback=tool_callback):
             full_text += chunk
             buffer += chunk
 
@@ -587,9 +619,12 @@ async def run_agent_response_fast(agent, history, update, prefix_emoji, prefix_n
     """
     msg = await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name} is thinking...*", markdown=True)
 
+    event_loop = asyncio.get_running_loop()
+    tool_callback = _make_tool_callback(update, prefix_emoji, prefix_name, event_loop)
+
     full_text = ""
     try:
-        full_text = await asyncio.to_thread(agent.chat, history)
+        full_text = await asyncio.to_thread(agent.chat, history, tool_callback)
         full_text = (full_text or "").strip()
 
         if enforce_card:
