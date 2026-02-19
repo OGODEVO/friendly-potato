@@ -551,15 +551,20 @@ TOOL_EMOJIS = {
     "get_nba_news": "📰",
 }
 
-async def _async_send_tool_status(update: Update, prefix_emoji: str, prefix_name: str, tool_name: str):
+async def _async_append_tool_status(msg, prefix_emoji: str, prefix_name: str, tool_name: str, tool_lines: list):
     tool_emoji = TOOL_EMOJIS.get(tool_name, "⚙️")
-    message = f"{tool_emoji} *{prefix_name}* is checking `{tool_name}`..."
-    await _safe_reply_text(update.message, message, markdown=True)
+    line = f"{tool_emoji} `{tool_name}`"
+    tool_lines.append(line)
+    
+    if msg:
+        lines_text = "\n".join(tool_lines)
+        text = f"{prefix_emoji} *{prefix_name} is gathering data...*\n{lines_text}"
+        await _safe_edit_text(msg, text, markdown=True)
 
-def _make_tool_callback(update: Update, prefix_emoji: str, prefix_name: str, event_loop: asyncio.AbstractEventLoop):
+def _make_tool_callback(msg, prefix_emoji: str, prefix_name: str, event_loop: asyncio.AbstractEventLoop, tool_lines: list):
     def callback(tool_name: str, args: dict):
         asyncio.run_coroutine_threadsafe(
-            _async_send_tool_status(update, prefix_emoji, prefix_name, tool_name),
+            _async_append_tool_status(msg, prefix_emoji, prefix_name, tool_name, tool_lines),
             event_loop
         )
     return callback
@@ -574,12 +579,15 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
     # Send initial "thinking" message
     msg = await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name} is thinking...*", markdown=True)
 
+    tool_lines = []
     event_loop = asyncio.get_running_loop()
-    tool_callback = _make_tool_callback(update, prefix_emoji, prefix_name, event_loop)
+    tool_callback = _make_tool_callback(msg, prefix_emoji, prefix_name, event_loop, tool_lines)
 
     full_text = ""
     buffer = ""
     last_edit_time = time.time()
+    stream_msg = None
+    
     try:
         for chunk in agent.chat_stream(history, tool_callback=tool_callback):
             full_text += chunk
@@ -588,9 +596,22 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
             now = time.time()
             # Edit message periodically to simulate streaming
             if len(buffer) >= MIN_CHUNK_SIZE and (now - last_edit_time) >= STREAM_EDIT_INTERVAL:
-                if msg:
-                    display = f"{prefix_emoji} *{prefix_name}:*\n{full_text}▌"
-                    await _safe_edit_text(msg, display, markdown=True)
+                display = f"{prefix_emoji} *{prefix_name}:*\n{full_text}▌"
+                if not stream_msg:
+                    if not tool_lines:
+                        if msg:
+                            try:
+                                await msg.delete()
+                            except Exception:
+                                pass
+                    else:
+                        if msg:
+                            lines_text = "\n".join(tool_lines)
+                            await _safe_edit_text(msg, f"{prefix_emoji} *{prefix_name} gathered data:*\n{lines_text}", markdown=True)
+                    
+                    stream_msg = await _safe_reply_text(update.message, display, markdown=True)
+                else:
+                    await _safe_edit_text(stream_msg, display, markdown=True)
                 buffer = ""
                 last_edit_time = now
         
@@ -599,19 +620,27 @@ async def stream_agent_response(agent, history, update, prefix_emoji, prefix_nam
             full_text = await _repair_card_if_needed(agent, history, full_text)
 
         # Final edit with complete text (no cursor)
-        if msg:
-            await _safe_edit_text(msg, f"{prefix_emoji} *{prefix_name}:*\n{full_text}", markdown=True)
+        if stream_msg:
+            await _safe_edit_text(stream_msg, f"{prefix_emoji} *{prefix_name}:*\n{full_text}", markdown=True)
         else:
-            await _safe_reply_text(update.message, f"{prefix_emoji} {prefix_name}:\n{full_text}")
+            if not tool_lines:
+                if msg:
+                    try:
+                        await msg.delete()
+                    except Exception:
+                        pass
+            else:
+                if msg:
+                    lines_text = "\n".join(tool_lines)
+                    await _safe_edit_text(msg, f"{prefix_emoji} *{prefix_name} gathered data:*\n{lines_text}", markdown=True)
+                    
+            await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name}:*\n{full_text}", markdown=True)
 
     except Exception as e:
         full_text = f"(Error: {e})"
         slog.error("agent.stream.error", agent=prefix_name, error=str(e))
         error_text = f"{prefix_emoji} {prefix_name}:\n⚠️ Error: {str(e)[:200]}"
-        if msg:
-            await _safe_edit_text(msg, error_text)
-        else:
-            await _safe_reply_text(update.message, error_text)
+        await _safe_reply_text(update.message, error_text)
 
     return full_text
 
@@ -623,8 +652,9 @@ async def run_agent_response_fast(agent, history, update, prefix_emoji, prefix_n
     """
     msg = await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name} is thinking...*", markdown=True)
 
+    tool_lines = []
     event_loop = asyncio.get_running_loop()
-    tool_callback = _make_tool_callback(update, prefix_emoji, prefix_name, event_loop)
+    tool_callback = _make_tool_callback(msg, prefix_emoji, prefix_name, event_loop, tool_lines)
 
     full_text = ""
     try:
@@ -634,19 +664,24 @@ async def run_agent_response_fast(agent, history, update, prefix_emoji, prefix_n
         if enforce_card:
             full_text = await _repair_card_if_needed(agent, history, full_text)
 
-        if msg:
-            await _safe_edit_text(msg, f"{prefix_emoji} *{prefix_name}:*\n{full_text}", markdown=True)
+        if not tool_lines:
+            if msg:
+                try:
+                    await msg.delete()
+                except Exception:
+                    pass
         else:
-            await _safe_reply_text(update.message, f"{prefix_emoji} {prefix_name}:\n{full_text}")
+            if msg:
+                lines_text = "\n".join(tool_lines)
+                await _safe_edit_text(msg, f"{prefix_emoji} *{prefix_name} gathered data:*\n{lines_text}", markdown=True)
+
+        await _safe_reply_text(update.message, f"{prefix_emoji} *{prefix_name}:*\n{full_text}", markdown=True)
 
     except Exception as e:
         full_text = f"(Error: {e})"
         slog.error("agent.fast_response.error", agent=prefix_name, error=str(e))
         error_text = f"{prefix_emoji} {prefix_name}:\n⚠️ Error: {str(e)[:200]}"
-        if msg:
-            await _safe_edit_text(msg, error_text)
-        else:
-            await _safe_reply_text(update.message, error_text)
+        await _safe_reply_text(update.message, error_text)
 
     return full_text
 
@@ -730,7 +765,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_histories[chat_id] = []
     
     history = chat_histories[chat_id]
-    history.append({"role": "user", "content": effective_user_text})
+    
+    # Prepend the current local time to the user's message for history context
+    now_ct = datetime.now(ZoneInfo("America/Chicago"))
+    time_prefix = f"[{now_ct.strftime('%I:%M %p')}] "
+    stamped_user_text = time_prefix + effective_user_text
+    
+    history.append({"role": "user", "content": stamped_user_text})
     _append_transcript(chat_id, "User", effective_user_text, meta=f"raw={user_text}")
     turn_history = list(history)
     active_mode = "analysis" if target_agent else _resolve_chat_mode(chat_id, effective_user_text)
