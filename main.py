@@ -14,6 +14,7 @@ from telegram import Update
 from telegram.error import BadRequest, NetworkError, RetryAfter, TimedOut
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import yaml
+import tiktoken
 
 from agents.analyst import AnalystAgent
 from agents.strategist import StrategistAgent
@@ -76,6 +77,12 @@ strategist = StrategistAgent(
     **strategist_kwargs
 )
 
+# Determine Safe Context Limit based on lowest max_tokens config (fallback to 64k)
+analyst_limit = int(analyst_config.get('max_tokens', 64000))
+strategist_limit = int(strategist_config.get('max_tokens', 64000))
+# Target ~80% of the lowest limit to leave room for the final turn + API responses
+SAFE_CONTEXT_LIMIT = int(min(analyst_limit, strategist_limit) * 0.8)
+
 CHAT_PROMPT = """You are a helpful NBA assistant in normal chat mode.
 - Be conversational and concise.
 - Do not produce betting picks unless the user asks for analysis/picks.
@@ -95,6 +102,33 @@ chat_agent = BaseAgent(
 chat_histories: dict[int, list] = {}
 chat_modes: dict[int, str] = {}
 chat_session_files: dict[int, Path] = {}
+
+STATE_FILE = Path(__file__).resolve().parent / "logs" / "state.json"
+
+def _load_state() -> None:
+    if STATE_FILE.exists():
+        try:
+            with STATE_FILE.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Convert string keys back to int for chat_ids
+                if "chat_histories" in data:
+                    chat_histories.update({int(k): v for k, v in data["chat_histories"].items()})
+                if "chat_modes" in data:
+                    chat_modes.update({int(k): v for k, v in data["chat_modes"].items()})
+            slog.info("state.loaded", file=str(STATE_FILE))
+        except Exception as e:
+            slog.error("state.load_failed", error=str(e))
+
+def _save_state() -> None:
+    try:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with STATE_FILE.open("w", encoding="utf-8") as f:
+            json.dump({
+                "chat_histories": chat_histories,
+                "chat_modes": chat_modes
+            }, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        slog.error("state.save_failed", error=str(e))
 
 # Persistent transcript logging
 BASE_DIR = Path(__file__).resolve().parent
@@ -346,6 +380,32 @@ def _extract_agent_target(user_text: str) -> tuple[Optional[str], str]:
     return target, cleaned
 
 
+_TOKENIZER = tiktoken.get_encoding("o200k_base")
+
+def _count_tokens(history: list[dict]) -> int:
+    """Roughly counts the number of tokens in the conversation history payload."""
+    count = 0
+    for message in history:
+        # Every message adds roughly 4 tokens for the framing <|im_start|>role\ncontent<|im_end|>
+        count += 4
+        
+        content = message.get("content", "")
+        if content:
+            count += len(_TOKENIZER.encode(str(content)))
+            
+        role = message.get("role", "")
+        if role:
+            count += len(_TOKENIZER.encode(role))
+            
+        name = message.get("name", "")
+        if name:
+            count += len(_TOKENIZER.encode(name))
+            
+    # Add roughly 3 tokens for the assistant reply primer
+    count += 3
+    return count
+
+
 def _apply_analysis_skill(history: list[dict]) -> list[dict]:
     if not ANALYSIS_SKILL_TEXT:
         return list(history)
@@ -358,6 +418,59 @@ def _apply_analysis_skill(history: list[dict]) -> list[dict]:
             ),
         }
     ] + list(history)
+
+
+async def _compact_history(chat_id: int):
+    """
+    Checks if the conversation history for `chat_id` exceeds SAFE_CONTEXT_LIMIT.
+    If it does, it uses the fast `chat_agent` to summarize the oldest messages,
+    replacing them in the history array to maintain an "infinite" context window.
+    """
+    history = chat_histories.get(chat_id, [])
+    if not history:
+        return
+
+    current_tokens = _count_tokens(history)
+    if current_tokens <= SAFE_CONTEXT_LIMIT:
+        return
+
+    slog.info("history.compact.start", chat_id=chat_id, tokens=current_tokens, limit=SAFE_CONTEXT_LIMIT)
+    
+    # Keep the most recent 10 messages intact to maintain immediate conversational flow
+    if len(history) <= 10:
+        slog.warning("history.compact.skip_too_few_messages", chat_id=chat_id)
+        return
+
+    old_messages = history[:-10]
+    recent_messages = history[-10:]
+
+    summary_prompt = [
+        {"role": "system", "content": "You are a helpful assistant. Please summarize the following conversation history concisely, preserving key facts, user preferences, and NBA analysis conclusions. Do not include pleasantries."},
+    ] + old_messages
+    
+    try:
+        # We use chat_agent.client directly for a quick non-tool completion
+        response = chat_agent.client.chat.completions.create(
+            model=chat_agent.model,
+            messages=summary_prompt,
+            temperature=0.3
+        )
+        summary_text = response.choices[0].message.content
+        
+        # Replace the old messages with the new summary block
+        summary_message = {
+            "role": "assistant",
+            "name": "SystemMemory",
+            "content": f"[System Note: Earlier conversation summarized for memory context]\n{summary_text}"
+        }
+        
+        chat_histories[chat_id] = [summary_message] + recent_messages
+        new_tokens = _count_tokens(chat_histories[chat_id])
+        slog.info("history.compact.complete", chat_id=chat_id, new_tokens=new_tokens, removed_msgs=len(old_messages))
+    except Exception as e:
+        slog.error("history.compact.failed", chat_id=chat_id, error=str(e))
+        # Fallback to simple truncation if summarization fails
+        chat_histories[chat_id] = history[-(len(history) // 2):]
 
 
 def _build_consensus_message(analyst_response: str, strategist_response: str) -> str:
@@ -607,8 +720,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         clear_context()
 
-        if len(history) > 30:
-            chat_histories[chat_id] = history[-30:]
+        await _compact_history(chat_id)
+        _save_state()
         return
 
     analysis_history = _apply_analysis_skill(turn_history)
@@ -656,15 +769,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     clear_context()
 
-    # Keep history manageable (last 30 messages)
-    if len(history) > 30:
-        chat_histories[chat_id] = history[-30:]
+    # Compact history before next turn
+    await _compact_history(chat_id)
+    _save_state()
 
 async def reset_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     _append_transcript(chat_id, "System", "Conversation reset via /reset")
     chat_histories[chat_id] = []
     chat_modes[chat_id] = "auto"
+    _save_state()
     new_session_path = _start_chat_session(chat_id, reason="reset")
     await _safe_reply_text(update.message, "🔄 Conversation history cleared.")
     await _safe_reply_text(
@@ -696,6 +810,9 @@ def main():
     print(f"   SKILL.md:   {'loaded' if ANALYSIS_SKILL_TEXT else 'not found'}")
     _ensure_log_dirs()
     print(f"   Logs Dir:   {LOG_DIR.resolve()}")
+    
+    _load_state()
+    print(f"   State:      Loaded {len(chat_histories)} persistent chat(s)")
     
     app = (
         ApplicationBuilder()

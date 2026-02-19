@@ -5,6 +5,7 @@ import logging
 import threading
 import time
 import concurrent.futures
+import diskcache
 from .nba_client import NBAClient
 from .odds_client import OddsClient
 from .team_lookup import resolve_team
@@ -20,8 +21,9 @@ _EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=10)
 
 # NBA schedules use US Eastern Time
 _ET = timezone(timedelta(hours=-5))
-_CACHE: Dict[str, tuple[float, str]] = {}
-_CACHE_LOCK = threading.Lock()
+
+# Persistent disk cache (thread-safe, survives restarts)
+_CACHE = diskcache.Cache("logs/cache")
 
 def _get_today() -> str:
     return datetime.now(_ET).strftime("%Y-%m-%d")
@@ -49,23 +51,15 @@ def _cache_key(tool_name: str, params: Dict[str, Any]) -> str:
 
 
 def _cache_get(key: str) -> Optional[str]:
-    now = time.time()
-    with _CACHE_LOCK:
-        entry = _CACHE.get(key)
-        if not entry:
-            return None
-        expires_at, value = entry
-        if expires_at <= now:
-            _CACHE.pop(key, None)
-            return None
-        return value
+    # diskcache automatically handles expiration during .get()
+    return _CACHE.get(key)
 
 
 def _cache_set(key: str, value: str, ttl_seconds: int) -> None:
     if ttl_seconds <= 0:
         return
-    with _CACHE_LOCK:
-        _CACHE[key] = (time.time() + ttl_seconds, value)
+    # Set the value with an expiration
+    _CACHE.set(key, value, expire=ttl_seconds)
 
 
 def _cached_json(
