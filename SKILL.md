@@ -11,7 +11,7 @@ Before analyzing, identify the game stage:
 
 ### 1. Pre-Game (Analysis Mode)
 - **Goal**: Vibes, Matchup Analysis, " Lean".
-- **Action**: Check `get_daily_schedule` and `get_team_stats`.
+- **Action**: Check `get_pregame_context` (includes stats, opponent, roster, odds).
 - **Constraint**: **NO FORCED BETS**. Only "Leans" or "Opinions" unless edge is massive.
 
 ### 2. Live: Q1 & Q2 (Data Collection)
@@ -28,10 +28,12 @@ Before analyzing, identify the game stage:
 
 ## Phase 2: Data Collection (The Sharp)
 The Sharp MUST use tools to gather the following context:
-1.  **Game Context**: `get_live_vs_season_context` (Live scores, efficiency deltas).
-2.  **Roster check**: `get_roster_context` (Injuries, depth charts). *Crucial for avoiding "autofade" on bad intel.*
+1.  **Game Context**: 
+    - *Pre-Game*: Use `get_pregame_context` (Single call for stats, rosters, and odds).
+    - *Halftime*: Use `get_live_vs_season_context` (Live scores, efficiency deltas).
+2.  **Roster check**: `get_roster_context` (Injuries, depth charts). *Crucial for avoiding "autofade" on bad intel. (Already included in get_pregame_context)*
 3.  **Vibes/News Check**: `get_nba_news` (Injuries updates, trade rumors, sentiment). *Do NOT use for stats.*
-4.  **Market Check**: `get_market_odds` (Spreads, totals, moneyline).
+4.  **Market Check**: `get_market_odds` (Spreads, totals, moneyline). *(Already included in get_pregame_context)*
 
 ### Sharp's Output Strictness
 - **The 5 Factors**: You MUST analyze these 5 core drivers:

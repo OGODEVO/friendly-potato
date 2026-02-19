@@ -643,6 +643,116 @@ def get_roster_context(team_name: str, include_raw: bool = False) -> str:
     )
 
 
+def get_pregame_context(
+    team_name: str,
+    date: str = None,
+    year: str = None,
+    include_roster: bool = True,
+    include_market: bool = True,
+    regions: str = "us",
+    markets: str = "h2h,spreads,totals",
+) -> str:
+    """
+    Unified workflow tool: **THE PRE-GAME WEAPON**.
+    1) Finds the team's game and opponent on the requested date
+    2) Pulls season team stats for both teams
+    3) Optionally attaches roster snapshots for both teams
+    4) Optionally attaches market snapshot
+    """
+    if not date:
+        date = _get_today()
+    if not year:
+        year = _get_current_season_year()
+
+    target_team_id = resolve_team(team_name)
+    if not target_team_id:
+        return json.dumps({"error": f"Could not resolve team '{team_name}'."})
+
+    schedule_data = client.get_schedule(date, team_id=target_team_id)
+    games = schedule_data.get("data", {}).get("NBA", [])
+    if not isinstance(games, list) or not games:
+        return json.dumps({
+            "error": f"No scheduled game found for {team_name} on {date}.",
+            "schedule_result": schedule_data,
+        })
+
+    game = games[0]
+    game_id = game.get("game_ID")
+    if not game_id:
+        return json.dumps({"error": "Could not determine game_ID from schedule.", "schedule_game": game})
+
+    home_name = game.get("home_team")
+    away_name = game.get("away_team")
+    home_id = game.get("home_team_ID")
+    away_id = game.get("away_team_ID")
+
+    # Launch parallel fetches for season stats, rosters, and market
+    future_home_stats = _EXECUTOR.submit(client.get_team_stats, year, team_id=home_id) if home_id else None
+    future_away_stats = _EXECUTOR.submit(client.get_team_stats, year, team_id=away_id) if away_id else None
+    
+    future_home_roster = None
+    if include_roster and home_name:
+        future_home_roster = _EXECUTOR.submit(_roster_summary, home_name)
+    
+    future_away_roster = None
+    if include_roster and away_name:
+        future_away_roster = _EXECUTOR.submit(_roster_summary, away_name)
+
+    future_market = None
+    if include_market and home_name and away_name:
+        future_market = _EXECUTOR.submit(_market_snapshot, home_name, away_name, regions=regions, markets=markets)
+
+    # Collect results
+    home_season_raw = future_home_stats.result() if future_home_stats else {}
+    away_season_raw = future_away_stats.result() if future_away_stats else {}
+
+    home_regular = _extract_regular_season(home_season_raw) if isinstance(home_season_raw, dict) else {}
+    away_regular = _extract_regular_season(away_season_raw) if isinstance(away_season_raw, dict) else {}
+
+    home_season_metrics = _season_metrics(home_regular)
+    away_season_metrics = _season_metrics(away_regular)
+
+    response: Dict[str, Any] = {
+        "query": {
+            "team_name": team_name,
+            "team_id": target_team_id,
+            "date": date,
+            "season_year": year,
+        },
+        "game": {
+            "game_id": game_id,
+            "event_name": game.get("event_name"),
+            "status": game.get("status"),
+            "home_team": home_name,
+            "away_team": away_name,
+        },
+        "season_context": {
+            "home": {
+                "team": home_name,
+                "season_metrics": home_season_metrics,
+            },
+            "away": {
+                "team": away_name,
+                "season_metrics": away_season_metrics,
+            },
+        },
+        "notes": [
+            "Use season_metrics to compare baseline efficiency and pace (estimated_possessions/OffRtg_est).",
+        ],
+    }
+
+    if include_roster:
+        if future_home_roster:
+            response.setdefault("roster", {})["home"] = future_home_roster.result()
+        if future_away_roster:
+            response.setdefault("roster", {})["away"] = future_away_roster.result()
+
+    if future_market:
+        response["market"] = future_market.result()
+
+    return json.dumps(response)
+
+
 def get_live_vs_season_context(
     team_name: str,
     date: str = None,
@@ -1044,6 +1154,24 @@ TOOLS_SCHEMA = [
                 "required": ["query"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_pregame_context",
+            "description": "Unified workflow tool: Finds the opponent, pulls season stats for both teams, and optionally attaches rosters and odds. PRIMARY PRE-GAME ANALYTICS TOOL.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "team_name": {"type": "string", "description": "A target team name, e.g. 'Nuggets'."},
+                    "date": {"type": "string", "description": "Date YYYY-MM-DD. Defaults to today."},
+                    "year": {"type": "string", "description": "Season start year. Defaults to current."},
+                    "include_roster": {"type": "boolean", "description": "Include injury/depth chart info (Default True)."},
+                    "include_market": {"type": "boolean", "description": "Include betting lines (Default True)."}
+                },
+                "required": ["team_name"]
+            }
+        }
     }
 ]
 
@@ -1058,5 +1186,6 @@ AVAILABLE_TOOLS = {
     "get_depth_chart": get_depth_chart,
     "get_roster_context": get_roster_context,
     "get_market_odds": get_market_odds,
-    "get_nba_news": get_nba_news
+    "get_nba_news": get_nba_news,
+    "get_pregame_context": get_pregame_context
 }
