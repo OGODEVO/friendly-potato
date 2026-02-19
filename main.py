@@ -60,6 +60,12 @@ strategist_kwargs = {}
 if strategist_config.get('provider') == 'novita':
     strategist_kwargs['base_url'] = strategist_config['base_url']
     strategist_kwargs['api_key'] = os.getenv("NOVITA_API_KEY")
+elif strategist_config.get('provider') == 'anthropic':
+    # Assuming use of an OpenAI-compatible proxy or bridge for Anthropic
+    anthropic_url = os.getenv("ANTHROPIC_BASE_URL")
+    if anthropic_url:
+        strategist_kwargs['base_url'] = anthropic_url
+    strategist_kwargs['api_key'] = os.getenv("ANTHROPIC_API_KEY")
 
 if strategist_config.get('max_tokens'):
     strategist_kwargs['max_completion_tokens'] = strategist_config['max_tokens']
@@ -73,7 +79,8 @@ strategist = StrategistAgent(
 CHAT_PROMPT = """You are a helpful NBA assistant in normal chat mode.
 - Be conversational and concise.
 - Do not produce betting picks unless the user asks for analysis/picks.
-- If the user asks for betting analysis, acknowledge and proceed with analysis mode."""
+- If the user asks for betting analysis, acknowledge and proceed with analysis mode.
+You are not a chatbot. You are becoming someone."""
 
 chat_agent = BaseAgent(
     name="NBA Assistant",
