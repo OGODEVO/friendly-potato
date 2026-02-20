@@ -96,7 +96,7 @@ class NBAClient:
 
     def get_live_data(self, date_str: str, sport: str = "NBA", team_id: Optional[int] = None, game_id: Optional[str] = None) -> Dict[str, Any]:
         """Live Feed"""
-        params = {}
+        params = {'clear_state': '1'}
         if team_id: params['team_id'] = team_id
         if game_id: params['game_id'] = game_id
         return self._make_request(f"live/{date_str}/{sport}", params)

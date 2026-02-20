@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import asyncio
+import json
 import logging
 import re
 import shutil
@@ -819,21 +820,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
         _append_transcript(chat_id, "The Contrarian", strategist_response, meta="mode=analysis,target=contrarian")
     else:
-        analyst_task = asyncio.create_task(
-        analyst_task = asyncio.create_task(
-            run_agent_response_fast(analyst, analysis_history, update, "📊", analyst.name)
+        # Run analyst first
+        analyst_response = await run_agent_response_fast(
+            analyst, analysis_history, update, "📊", analyst.name
         )
-        )
-        strategist_task = asyncio.create_task(
-        strategist_task = asyncio.create_task(
-            run_agent_response_fast(strategist, analysis_history, update, "🎯", strategist.name)
-        )
-        )
-        analyst_response, strategist_response = await asyncio.gather(analyst_task, strategist_task)
-
         history.append({"role": "assistant", "name": "Analyst", "content": analyst_response})
-        history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
         _append_transcript(chat_id, "The Sharp", analyst_response, meta="mode=analysis,target=both")
+
+        # Pass analyst response into strategist history so it can read it before generating a response
+        strategist_history = list(analysis_history)
+        strategist_history.append({
+            "role": "user",
+            "name": "SystemHandoff", 
+            "content": f"[System: The Sharp has completed their analysis. Please review their findings before providing your Contarian take.]\n\n{analyst_response}"
+        })
+
+        # Run strategist sequentially
+        strategist_response = await run_agent_response_fast(
+            strategist, strategist_history, update, "🎯", strategist.name
+        )
+        history.append({"role": "assistant", "name": "Strategist", "content": strategist_response})
         _append_transcript(chat_id, "The Contrarian", strategist_response, meta="mode=analysis,target=both")
 
         consensus = _build_consensus_message(analyst_response, strategist_response)

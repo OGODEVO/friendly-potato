@@ -25,8 +25,10 @@ class BaseAgent:
         )
         
     def _execute_tool_calls(self, tool_calls, tool_callback=None) -> List[Dict[str, Any]]:
-        results = []
-        for tool_call in tool_calls:
+        from concurrent.futures import ThreadPoolExecutor
+        results = [None] * len(tool_calls)
+
+        def _run_tool(index: int, tool_call):
             function_name = tool_call.function.name
             function_args = json.loads(tool_call.function.arguments)
             
@@ -75,12 +77,16 @@ class BaseAgent:
                     tool=function_name,
                 )
             
-            results.append({
+            results[index] = {
                 "tool_call_id": tool_call.id,
                 "role": "tool",
                 "name": function_name,
                 "content": str(response)
-            })
+            }
+
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            for i, tc in enumerate(tool_calls):
+                executor.submit(_run_tool, i, tc)
         return results
 
     def chat(self, history: List[Dict[str, Any]], tool_callback=None) -> str:

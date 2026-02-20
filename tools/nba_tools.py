@@ -388,6 +388,13 @@ def get_live_scores(date: str = None, team_name: str = None) -> str:
         team_id = None
 
     data = client.get_live_data(date, team_id=team_id, game_id=game_id)
+    # Give the LLM clear instructions on what 304 means if they hit it
+    if data.get("status") == "No data updates (304)":
+        return json.dumps({
+            "info": "The game is live but no new statistics have updated since the last API poll. "
+                    "Wait a few minutes and try again if necessary."
+        })
+        
     return json.dumps(data)
 
 def get_team_details(team_name: str = None) -> str:
@@ -732,6 +739,7 @@ def get_pregame_context(
         },
         "notes": [
             "Use season_metrics to compare baseline efficiency and pace (estimated_possessions/OffRtg_est).",
+            "CRITICAL: The 'game' object above contains the event_name and status. DO NOT ask the user for game status or timing.",
         ],
     }
 
@@ -787,10 +795,17 @@ def get_live_vs_season_context(
         return json.dumps({"error": "Could not determine game_ID from schedule.", "schedule_game": game})
 
     live_data = client.get_live_data(date, game_id=game_id)
+    
+    if live_data.get("status") == "No data updates (304)":
+        return json.dumps({
+            "info": f"No new data/updates available for game_id {game_id} since last poll (304 Not Modified).",
+            "suggestion": "Wait a minute and try again."
+        })
+        
     live_games = live_data.get("data", {}).get("NBA", [])
     if not isinstance(live_games, list) or not live_games:
         return json.dumps({
-            "error": f"Live/box data not available for game_id {game_id}.",
+            "error": f"Live/box data not available or malformed for game_id {game_id}.",
             "live_result": live_data,
         })
 
@@ -868,6 +883,7 @@ def get_live_vs_season_context(
         "notes": [
             "Use delta_live_minus_season for regression/context checks.",
             "Live/final team_stats are game-level; season metrics are full-season baselines.",
+            "CRITICAL: The 'game' object above contains the current quarter, time_remaining, and scores. DO NOT ask the user for this information.",
         ],
     }
 
