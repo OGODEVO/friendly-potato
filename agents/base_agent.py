@@ -142,51 +142,78 @@ class BaseAgent:
         turn_timer = Timer()
         tool_call_rounds = 0
         
-        # First, resolve any tool calls (non-streaming, since tool results must be complete)
         while True:
-            # Check if the model wants tool calls first (non-streaming probe)
-            probe = self.client.chat.completions.create(
+            stream = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 tools=TOOLS_SCHEMA,
-                tool_choice="auto",
+                stream=True,
                 temperature=self.temperature,
                 max_completion_tokens=self.max_completion_tokens
             )
             
-            probe_msg = probe.choices[0].message
+            tool_calls_dict = {}
+            is_tool_call = False
+            total_chars = 0
             
-            if probe_msg.tool_calls:
+            for event in stream:
+                if not event.choices:
+                    continue
+                delta = event.choices[0].delta
+                
+                if delta.tool_calls:
+                    is_tool_call = True
+                    for tc in delta.tool_calls:
+                        idx = tc.index
+                        if idx not in tool_calls_dict:
+                            tool_calls_dict[idx] = {
+                                "id": tc.id,
+                                "function": {"name": "", "arguments": ""}
+                            }
+                        if tc.id:
+                            tool_calls_dict[idx]["id"] = tc.id
+                        if tc.function:
+                            if tc.function.name:
+                                tool_calls_dict[idx]["function"]["name"] += tc.function.name
+                            if tc.function.arguments:
+                                tool_calls_dict[idx]["function"]["arguments"] += tc.function.arguments
+                elif delta.content:
+                    chunk = delta.content
+                    total_chars += len(chunk)
+                    yield chunk
+
+            if is_tool_call:
                 tool_call_rounds += 1
-                # Handle tool calls non-streaming
-                messages.append(probe_msg)
-                tool_results = self._execute_tool_calls(probe_msg.tool_calls, tool_callback=tool_callback)
+                class DummyObj: pass
+                constructed_calls = []
+                for idx in sorted(tool_calls_dict.keys()):
+                    call_data = tool_calls_dict[idx]
+                    obj = DummyObj()
+                    obj.id = call_data["id"]
+                    obj.function = DummyObj()
+                    obj.function.name = call_data["function"]["name"]
+                    obj.function.arguments = call_data["function"]["arguments"]
+                    constructed_calls.append(obj)
+                    
+                assistant_message = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": c.id,
+                            "type": "function",
+                            "function": {
+                                "name": c.function.name,
+                                "arguments": c.function.arguments
+                            }
+                        } for c in constructed_calls
+                    ]
+                }
+                messages.append(assistant_message)
+                
+                tool_results = self._execute_tool_calls(constructed_calls, tool_callback=tool_callback)
                 messages.extend(tool_results)
-                # Loop to check for more tool calls
             else:
-                # No more tool calls — now stream the final text response
-                slog.info(
-                    "agent.stream.final_start",
-                    agent=self.name,
-                    model=self.model,
-                    tool_call_rounds=tool_call_rounds,
-                )
-                stream = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=TOOLS_SCHEMA,
-                    stream=True,
-                    temperature=self.temperature,
-                    max_completion_tokens=self.max_completion_tokens
-                )
-                
-                total_chars = 0
-                for event in stream:
-                    if event.choices and event.choices[0].delta.content:
-                        chunk = event.choices[0].delta.content
-                        total_chars += len(chunk)
-                        yield chunk
-                
                 turn_timer.stop()
                 slog.info(
                     "agent.stream.complete",

@@ -388,12 +388,24 @@ def get_live_scores(date: str = None, team_name: str = None) -> str:
         team_id = None
 
     data = client.get_live_data(date, team_id=team_id, game_id=game_id)
+    fallback_key = f"live_fallback_{date}_{game_id or ''}_{team_id or ''}"
     # Give the LLM clear instructions on what 304 means if they hit it
     if data.get("status") == "No data updates (304)":
+        cached_str = _cache_get(fallback_key)
+        if cached_str:
+            try:
+                cached_data = json.loads(cached_str)
+                cached_data["_cached_fallback"] = True
+                cached_data["_info"] = "The game is live but no new statistics have updated since the last poll. Returning the last known boxscore."
+                return json.dumps(cached_data)
+            except Exception:
+                pass
         return json.dumps({
             "info": "The game is live but no new statistics have updated since the last API poll. "
                     "Wait a few minutes and try again if necessary."
         })
+    elif "error" not in data:
+        _cache_set(fallback_key, json.dumps(data), 6 * 60 * 60)
         
     return json.dumps(data)
 
@@ -795,12 +807,26 @@ def get_live_vs_season_context(
         return json.dumps({"error": "Could not determine game_ID from schedule.", "schedule_game": game})
 
     live_data = client.get_live_data(date, game_id=game_id)
+    fallback_key = f"live_fallback_{date}_{game_id}_live_data"
     
     if live_data.get("status") == "No data updates (304)":
-        return json.dumps({
-            "info": f"No new data/updates available for game_id {game_id} since last poll (304 Not Modified).",
-            "suggestion": "Wait a minute and try again."
-        })
+        cached_str = _cache_get(fallback_key)
+        if cached_str:
+            try:
+                live_data = json.loads(cached_str)
+                live_data["_cached_fallback"] = True
+            except Exception:
+                return json.dumps({
+                    "info": f"No new data/updates available for game_id {game_id} since last poll (304 Not Modified).",
+                    "suggestion": "Wait a minute and try again."
+                })
+        else:
+            return json.dumps({
+                "info": f"No new data/updates available for game_id {game_id} since last poll (304 Not Modified).",
+                "suggestion": "Wait a minute and try again."
+            })
+    elif "error" not in live_data:
+        _cache_set(fallback_key, json.dumps(live_data), 6 * 60 * 60)
         
     live_games = live_data.get("data", {}).get("NBA", [])
     if not isinstance(live_games, list) or not live_games:
