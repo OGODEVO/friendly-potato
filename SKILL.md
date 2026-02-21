@@ -22,8 +22,8 @@ Before analyzing, identify the game stage:
 ### 3. Live: Halftime (THE KILL ZONE)
 - **Goal**: **PRIMARY ENTRY POINT**. Catch the bookmakers napping on adjustments.
 - **Action**: MUST call `get_live_vs_season_context`.
-    - Look for **Efficiency Deltas**: Is a team shooting 20% below season avg? (Regression Candidate).
-    - Look for **Pace Deltas**: Is the game 10 possessions faster than avg? (Live Over Candidate).
+    - Look for **Efficiency Deltas**: Is a team shooting 20% below season avg? (Positive Regression Candidate -> Over potential). Is a team shooting unsustainably hot? (Negative Regression Candidate -> Under potential).
+    - Look for **Pace Deltas**: Is the game much faster or slower than expected?
 - **Constraint**: This is where you fire. High confidence picks allowed here.
 
 ## Phase 2: Data Collection (The Sharp)
@@ -40,7 +40,7 @@ The Sharp MUST use tools to gather the following context:
 - **The 5 Factors**: You MUST analyze these 5 core drivers:
     1.  **Shooting**: eFG% (Effective Field Goal Percentage).
     2.  **Rebounding**: ORB% / DRB% (Second chance points).
-    3.  **Fouls**: Free Throw Rate & Foul Trouble risks.
+    3.  **Fouls**: Free Throw Rate & Foul Trouble risks. (Note: High fouls mean clock stoppages and easy points, which heavily correlates to the OVER).
     4.  **Pace**: Possessions per game (Speed of play).
     5.  **Venue**: Home/Away splits & Altitude impact.
 - **Roster Impact**: quantify the loss of a player (e.g. "Missing leading scorer = -4.5ppg impact").
